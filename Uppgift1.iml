@@ -3,10 +3,12 @@
   <component name="NewModuleRootManager" inherit-compiler-output="true">
     <exclude-output />
     <content url="file://$MODULE_DIR$">
+      <sourceFolder url="file://$MODULE_DIR$/tanks_bas_v1_0/data" type="java-resource" />
       <sourceFolder url="file://$MODULE_DIR$/tanks_bas_v1_0/out/source" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/tanks_bas_v1_0/src" isTestSource="false" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
-    <orderEntry type="library" exported="" name="core" level="project" />
+    <orderEntry type="library" name="core" level="project" />
   </component>
 </module>
