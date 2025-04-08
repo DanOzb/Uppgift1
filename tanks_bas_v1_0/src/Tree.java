@@ -1,6 +1,8 @@
 import processing.core.*;
 
-class Tree extends PApplet {
+class Tree {
+
+    private PApplet parent;
 
     PVector position;
     String  name;
@@ -8,8 +10,8 @@ class Tree extends PApplet {
     float   diameter;
 
     //**************************************************
-    Tree(PImage _image, int _posx, int _posy) {
-
+    Tree(PApplet parent, PImage _image, int _posx, int _posy) {
+        this.parent = parent;
         this.img       = _image;
         this.diameter  = this.img.width/2;
         this.name      = "tree";

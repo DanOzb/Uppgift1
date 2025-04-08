@@ -5,6 +5,7 @@ public class tanks_bas_v1_0 extends PApplet{
 // Variabelnamn har satts för att försöka överensstämma med exempelkoden.
 // Klassen Tank är minimal och skickas mer med som koncept(anrop/states/vektorer).
 
+  Fog fog;
   boolean left, right, up, down;
   boolean mouse_pressed;
 
@@ -37,6 +38,7 @@ public class tanks_bas_v1_0 extends PApplet{
   //ändra till setup när du flyttar till processing
   public void settings()
   {
+
     size(800, 800);
     up             = false;
     down           = false;
@@ -71,13 +73,13 @@ public class tanks_bas_v1_0 extends PApplet{
     team1_tank2_startpos  = new PVector(width-50, height-50);
 
     //tank0_startpos = new PVector(50, 50);
-    tank0 = new Tank("tank0", team0_tank0_startpos,tank_size, team0Color );
-    tank1 = new Tank("tank1", team0_tank1_startpos,tank_size, team0Color );
-    tank2 = new Tank("tank2", team0_tank2_startpos,tank_size, team0Color );
+    tank0 = new Tank(this,"tank0", team0_tank0_startpos,tank_size, team0Color );
+    tank1 = new Tank(this,"tank1", team0_tank1_startpos,tank_size, team0Color );
+    tank2 = new Tank(this,"tank2", team0_tank2_startpos,tank_size, team0Color );
 
-    tank3 = new Tank("tank3", team1_tank0_startpos,tank_size, team1Color );
-    tank4 = new Tank("tank4", team1_tank1_startpos,tank_size, team1Color );
-    tank5 = new Tank("tank5", team1_tank2_startpos,tank_size, team1Color );
+    tank3 = new Tank(this,"tank3", team1_tank0_startpos,tank_size, team1Color );
+    tank4 = new Tank(this,"tank4", team1_tank1_startpos,tank_size, team1Color );
+    tank5 = new Tank(this,"tank5", team1_tank2_startpos,tank_size, team1Color );
 
     allTanks[0] = tank0;                         // Symbol samma som index!
     allTanks[1] = tank1;
@@ -85,6 +87,8 @@ public class tanks_bas_v1_0 extends PApplet{
     allTanks[3] = tank3;
     allTanks[4] = tank4;
     allTanks[5] = tank5;
+
+    fog = new Fog(this);
   }
 
   public void draw()
@@ -106,8 +110,11 @@ public class tanks_bas_v1_0 extends PApplet{
     displayHomeBase();
     displayTrees();
     displayTanks();
-
     displayGUI();
+    
+    displayFog();
+
+
   }
 
   //======================================
@@ -136,7 +143,7 @@ public class tanks_bas_v1_0 extends PApplet{
 
   //======================================
   void updateTanksLogic() {
-    tank0.display();
+    tank0.update();
   }
 
   void checkForCollisions() {
@@ -172,6 +179,15 @@ public class tanks_bas_v1_0 extends PApplet{
     for (Tank tank : allTanks) {
       tank.display();
     }
+  }
+
+
+  void displayFog() {
+    fog.resetFog();
+
+    fog.clearAroundTank(tank0);
+
+    fog.display();
   }
 
   void displayGUI() {
