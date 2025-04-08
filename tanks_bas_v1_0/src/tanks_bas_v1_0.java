@@ -35,11 +35,12 @@ public class tanks_bas_v1_0 extends PApplet{
   boolean pause;
 
   //======================================
-  //ändra till setup när du flyttar till processing
   public void settings()
   {
-
     size(800, 800);
+  }
+
+  public void setup() {
     up             = false;
     down           = false;
     mouse_pressed  = false;
@@ -61,7 +62,7 @@ public class tanks_bas_v1_0 extends PApplet{
     tank_size = 50;
 
     // Team0
-    team0Color  = color(204, 50, 50);// Base Team 0(red)     
+    team0Color  = color(204, 50, 50);// Base Team 0(red)
     team0_tank0_startpos  = new PVector(50, 50);
     team0_tank1_startpos  = new PVector(50, 150);
     team0_tank2_startpos  = new PVector(50, 250);
@@ -89,6 +90,7 @@ public class tanks_bas_v1_0 extends PApplet{
     allTanks[5] = tank5;
 
     fog = new Fog(this);
+    fog.initialize();  // Initialize fog after window is properly sized
   }
 
   public void draw()
@@ -111,7 +113,7 @@ public class tanks_bas_v1_0 extends PApplet{
     displayTrees();
     displayTanks();
     displayGUI();
-    
+
     displayFog();
 
 
