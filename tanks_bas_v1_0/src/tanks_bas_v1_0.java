@@ -185,10 +185,9 @@ public class tanks_bas_v1_0 extends PApplet{
 
 
   void displayFog() {
-    fog.resetFog();
-
+    // No need to resetFog() anymore
+    // Just clear around tank and display
     fog.clearAroundTank(tank0);
-
     fog.display();
   }
 
