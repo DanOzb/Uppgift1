@@ -76,6 +76,8 @@ class Tank {
             position.x = r;
         if (position.y - r < 0)
             position.y = r;
+
+        
     }
 
     // Movement functions
@@ -105,38 +107,64 @@ class Tank {
     }
 
     // Handle actions like move, stop, etc.
-    void action(String _action) {
-        parent.println("*** Tank.action()");
-        switch (_action) {
-            case "move":
-                moveForward();
-                break;
-            case "reverse":
-                moveBackward();
-                break;
-            case "stop":
-                stopMoving();
-                break;
-        }
-    }
+//    void action(String _action) {
+//        parent.println("*** Tank.action()");
+//        switch (_action) {
+//            case "move":
+//                moveForward();
+//                break;
+//            case "reverse":
+//                moveBackward();
+//                break;
+//            case "stop":
+//                stopMoving();
+//                break;
+//        }
+//    }
 
     // Update tank's movement logic
     void update() {
         parent.println("*** Tank.update()");
-        state = 1;
         switch (state) {
             case 0:
                 // idle
-                action("stop");
+                stopMoving();
                 break;
             case 1:
-                action("move");
+                moveForward();
                 break;
             case 2:
-                action("reverse");
+                moveBackward();
+                break;
+            case 3:
+                moveDownwards();
+                break;
+            case 4:
+                moveUpwards();
                 break;
         }
         this.position.add(velocity);
+    }
+
+    private void moveUpwards() {
+        parent.println("*** Tank.moveDownwards()");
+        if (this.velocity.y > -this.maxspeed) {
+            this.velocity.y -= 0.01;
+        } else {
+            this.velocity.y = -this.maxspeed;
+        }
+
+    }
+
+    private void moveDownwards() {
+        parent.println("*** Tank.moveUpwards()");
+
+        if (this.velocity.y < this.maxspeed) {
+            this.velocity.y += 0.01;
+        } else {
+            this.velocity.y = this.maxspeed;
+        }
+
     }
 
     // Draw the tank's visual representation

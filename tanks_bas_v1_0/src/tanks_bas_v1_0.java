@@ -122,25 +122,29 @@ public class tanks_bas_v1_0 extends PApplet{
   //======================================
   void checkForInput() {
 
-    if (up) {
-      if (!pause && !gameOver) {
-        tank0.state=1; // moveForward
-      }
-    } else
-    if (down) {
-      if (!pause && !gameOver) {
-        tank0.state=2; // moveBackward
-      }
-    }
+//    if (up) {
+//      if (!pause && !gameOver) {
+//        //up
+//      }
+//    } else
+//    if (down) {
+//      if (!pause && !gameOver) {
+//      }
+//    }
 
     if (right) {
-    } else
-    if (left) {
+      tank0.state=1;
+    } else if (left) {
+      tank0.state=2;
+    } else if (down) {
+      tank0.state = 3;
+    } else if (up) {
+      tank0.state=4;
     }
 
-    if (!up && !down) {
-      tank0.state=0;
-    }
+    //if (!up && !down) {
+      //tank0.state=0;
+    //}
   }
 
   //======================================
