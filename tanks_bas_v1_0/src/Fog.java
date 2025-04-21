@@ -7,6 +7,7 @@ class Fog {
     int fogColor;
     int fogAlpha;
     boolean initialized;
+    Environment environment;
 
     // Store visited positions
     ArrayList<PVector> visitedPositions;
@@ -17,6 +18,7 @@ class Fog {
         this.fogAlpha = 100;
         this.initialized = false;
         this.visitedPositions = new ArrayList<PVector>();
+        this.environment = new Environment(parent);
     }
 
     void initialize() {
@@ -38,8 +40,11 @@ class Fog {
 
         // Only add if not too close to existing points
         for (PVector pos : visitedPositions) {
-            if (PVector.dist(pos, currentPos) < 20) {
+            if (PVector.dist(pos, currentPos) < 50) {
                 alreadyVisited = true;
+                Node node = environment.createNode(pos.x, pos.y); //TODO: bandaid
+                environment.setPosition(node);
+                node.display();
                 break;
             }
         }

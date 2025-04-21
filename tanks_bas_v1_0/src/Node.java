@@ -14,7 +14,7 @@ class Node {
         this.parent = parent;
         position = new PVector(x, y);
         edges = new ArrayList<>();
-        visited = false;
+        //visited = false;
         visitCount = 0;
     }
 

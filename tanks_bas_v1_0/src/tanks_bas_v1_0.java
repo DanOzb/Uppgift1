@@ -114,9 +114,17 @@ public class tanks_bas_v1_0 extends PApplet{
     displayTanks();
     displayGUI();
 
+    displayNodes();
+
     displayFog();
 
 
+  }
+
+  private void displayNodes() {
+    for (Node node : fog.environment.nodes) {
+      node.display();
+    }
   }
 
   //======================================
@@ -157,6 +165,7 @@ public class tanks_bas_v1_0 extends PApplet{
     for (Tank tank : allTanks) {
       tank.checkForCollisions(tank1);
       tank.checkForCollisions(new PVector(width, height));
+      tank.checkForCollisions(allTrees);
     }
   }
 
@@ -174,6 +183,10 @@ public class tanks_bas_v1_0 extends PApplet{
 
   // Följande bör ligga i klassen Tree
   void displayTrees() {
+    allTrees[0] = new Tree(this,tree_img,tree1_pos.x,tree1_pos.y);
+    allTrees[1] = new Tree(this,tree_img,tree2_pos.x,tree2_pos.y);
+    allTrees[2] = new Tree(this,tree_img,tree3_pos.x,tree3_pos.y);
+
     imageMode(CENTER);
     image(tree_img, tree1_pos.x, tree1_pos.y);
     image(tree_img, tree2_pos.x, tree2_pos.y);

@@ -53,10 +53,14 @@ class Tank {
         borders();
     }
 
-    void checkForCollisions(Tree sprite) {
-        // Implement collision logic
+    void checkForCollisions(Tree... tree) {
+        for (Tree t : tree) {
+            if (t.checkCollision(this)) {
+                velocity.x = 0;
+                velocity.y = 0;
+            }
+        }
     }
-
     void checkForCollisions(Tank tank){
         // Implement collision logic
     }
@@ -68,16 +72,26 @@ class Tank {
     // Border collision logic
     void borders() {
         float r = diameter/2;
-        if (position.x + r > parent.width)
-            position.x = parent.width-r;
-        if (position.y + r > parent.height)
-            position.y = parent.height-r;
-        if (position.x - r < 0)
+        if (position.x + r > parent.width) {
+            position.x = parent.width - r;
+            velocity.x = 0;
+            velocity.y = 0;
+        }
+        if (position.y + r > parent.height) {
+            position.y = parent.height - r;
+            velocity.y = 0;
+            velocity.x = 0;
+        }
+        if (position.x - r < 0) {
             position.x = r;
-        if (position.y - r < 0)
+            velocity.x = 0;
+            velocity.y = 0;
+        }
+        if (position.y - r < 0) {
             position.y = r;
-
-        
+            velocity.y = 0;
+            velocity.x = 0;
+        }
     }
 
     // Movement functions
