@@ -8,6 +8,7 @@ public class tanks_bas_v1_0 extends PApplet{
   Fog fog;
   boolean left, right, up, down;
   boolean mouse_pressed;
+  Explorer explorer;
 
   PImage tree_img;
   PVector tree1_pos, tree2_pos, tree3_pos;
@@ -90,7 +91,9 @@ public class tanks_bas_v1_0 extends PApplet{
     allTanks[5] = tank5;
 
     fog = new Fog(this);
-    fog.initialize();  // Initialize fog after window is properly sized
+    fog.initialize();// Initialize fog after window is properly sized
+
+    explorer = new Explorer(this,tank0.startpos.x,tank0.startpos.y,50f);
   }
 
   public void draw()
@@ -113,7 +116,7 @@ public class tanks_bas_v1_0 extends PApplet{
     displayTrees();
     displayTanks();
     displayGUI();
-
+    explorer.exploreDFS();
     displayNodes();
 
     displayFog();
@@ -158,6 +161,7 @@ public class tanks_bas_v1_0 extends PApplet{
   //======================================
   void updateTanksLogic() {
     tank0.update();
+    explorer.exploreDFS();
   }
 
   void checkForCollisions() {
@@ -224,7 +228,7 @@ public class tanks_bas_v1_0 extends PApplet{
 
   //======================================
   public void keyPressed() {
-    System.out.println("keyPressed!");
+    //System.out.println("keyPressed!");
 
     if (key == CODED) {
       switch(keyCode) {
@@ -246,7 +250,7 @@ public class tanks_bas_v1_0 extends PApplet{
   }
 
   public void keyReleased() {
-    System.out.println("keyReleased!");
+    //System.out.println("keyReleased!");
     if (key == CODED) {
       switch(keyCode) {
         case LEFT:

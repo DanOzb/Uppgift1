@@ -40,5 +40,6 @@ class Node {
     }
 
 
-
+    public void addNeighbor(Node newNode) {
+    }
 }

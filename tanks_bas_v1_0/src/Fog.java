@@ -8,6 +8,7 @@ class Fog {
     int fogAlpha;
     boolean initialized;
     Environment environment;
+    Explorer explorer;
 
     // Store visited positions
     ArrayList<PVector> visitedPositions;
@@ -19,6 +20,7 @@ class Fog {
         this.initialized = false;
         this.visitedPositions = new ArrayList<PVector>();
         this.environment = new Environment(parent);
+        //explorer = new Explorer(parent,50f,50f, 50f);
     }
 
     void initialize() {
@@ -42,9 +44,9 @@ class Fog {
         for (PVector pos : visitedPositions) {
             if (PVector.dist(pos, currentPos) < 50) {
                 alreadyVisited = true;
-                Node node = environment.createNode(pos.x, pos.y); //TODO: bandaid
-                environment.setPosition(node);
-                node.display();
+                //Node node = environment.createNode(pos.x, pos.y); //TODO: bandaid
+                //environment.setPosition(node);
+                //node.display();
                 break;
             }
         }

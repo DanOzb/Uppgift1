@@ -22,6 +22,7 @@ class Tank {
     boolean isInTransition;
 
     Environment environment;
+    Explorer explorer;
 
     // Constructor
     Tank(PApplet parent, String _name, PVector _startpos, float _size, int _col ) {
@@ -45,11 +46,12 @@ class Tank {
 
         environment = new Environment(parent);
         environment.setPosition(environment.createNode(this.position.x, this.position.y));
+
     }
 
     //======================================
     void checkEnvironment() {
-        parent.println("*** Tank.checkEnvironment()");
+        //parent.println("*** Tank.checkEnvironment()");
         borders();
     }
 
@@ -96,7 +98,7 @@ class Tank {
 
     // Movement functions
     void moveForward() {
-        parent.println("*** Tank.moveForward()");
+        //parent.println("*** Tank.moveForward()");
 
         if (this.velocity.x < this.maxspeed) {
             this.velocity.x += 0.01;
@@ -106,7 +108,7 @@ class Tank {
     }
 
     void moveBackward() {
-        parent.println("*** Tank.moveBackward()");
+        //parent.println("*** Tank.moveBackward()");
 
         if (this.velocity.x > -this.maxspeed) {
             this.velocity.x -= 0.01;
@@ -116,7 +118,7 @@ class Tank {
     }
 
     void stopMoving() {
-        parent.println("*** Tank.stopMoving()");
+        //parent.println("*** Tank.stopMoving()");
         this.velocity.x = 0;
     }
 
@@ -138,7 +140,7 @@ class Tank {
 
     // Update tank's movement logic
     void update() {
-        parent.println("*** Tank.update()");
+        //parent.println("*** Tank.update()");
         switch (state) {
             case 0:
                 // idle
