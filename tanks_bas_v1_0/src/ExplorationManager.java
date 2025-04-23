@@ -94,19 +94,17 @@ class ExplorationManager {
         System.out.println("Tank grid position: " + gridX + ", " + gridY);
 
         // Check if this is a new grid position
-        boolean isNewPosition = true;
         Node existingNode = null;
 
-        // Look for existing node at this grid position with a more forgiving distance check
+        // Look for existing node at this grid position
         for (Node node : nodes) {
             if (PVector.dist(node.position, gridPos) < stepSize/2) {
-                isNewPosition = false;
                 existingNode = node;
                 break;
             }
         }
 
-        if (isNewPosition) {
+        if (existingNode == null) {
             // Create a new node at this position
             System.out.println("Creating new node at: " + gridX + ", " + gridY);
             Node newNode = new Node(parent, gridX, gridY);
@@ -121,10 +119,9 @@ class ExplorationManager {
 
             // Update current node
             currentNode = newNode;
-            currentNode.markVisited();
 
-            // If we're in auto-explore mode, add to DFS stack
-            if (autoExplore) {
+            // If we're in auto-explore mode, add to DFS stack if not already present
+            if (autoExplore && !dfsStackContains(currentNode)) {
                 dfsStack.push(currentNode);
                 System.out.println("Added new node to DFS stack, size now: " + dfsStack.size());
             }
@@ -133,7 +130,7 @@ class ExplorationManager {
             visitedPositions.add(gridPos.copy());
             updateFog();
         }
-        else if (existingNode != null && existingNode != currentNode) {
+        else if (existingNode != currentNode) {
             // We've moved to an existing node
             System.out.println("Moved to existing node at: " + gridX + ", " + gridY);
 
@@ -155,14 +152,21 @@ class ExplorationManager {
 
             // Update current node
             currentNode = existingNode;
-            currentNode.markVisited();
 
             // If we're in auto-explore mode and this node isn't in the stack, add it
-            if (autoExplore && !dfsStack.contains(currentNode)) {
+            if (autoExplore && !dfsStackContains(currentNode)) {
                 dfsStack.push(currentNode);
                 System.out.println("Added existing node to DFS stack, size now: " + dfsStack.size());
             }
         }
+    }
+    boolean dfsStackContains(Node node) {
+        for (Node stackNode : dfsStack) {
+            if (stackNode == node) {
+                return true;
+            }
+        }
+        return false;
     }
 
     void connectNodes(Node node1, Node node2) {
@@ -187,15 +191,58 @@ class ExplorationManager {
     public boolean isAutoExploreActive() {
         return autoExplore;
     }
+    boolean borderCollisionOccurred = false;
+
+    void handleBorderCollision() {
+        borderCollisionOccurred = true;
+        System.out.println("Border collision detected, will recalculate path");
+
+        // Force the current node to be marked as fully explored
+        if (currentNode != null) {
+            // Mark all directions from this node as "visited" to force backtracking
+            currentNode.markVisited();
+
+            // Force a path recalculation by removing current node from stack
+            if (!dfsStack.isEmpty() && dfsStack.peek() == currentNode) {
+                dfsStack.pop();
+            }
+        }
+    }
 
     void exploreDFS() {
-        if (!autoExplore || dfsStack.isEmpty() || tank == null) {
+        if (!autoExplore || tank == null) {
             return; // Nothing to explore
         }
 
         System.out.println("DFS exploration active with stack size: " + dfsStack.size());
 
-        // Check if tank has reached the current node's position (within a threshold)
+        // Handle border collision recovery
+        if (borderCollisionOccurred) {
+            borderCollisionOccurred = false;
+
+            // Try to find a new path after collision
+            if (!dfsStack.isEmpty()) {
+                // Get the next node to move to (backtracking)
+                Node nextNode = dfsStack.peek();
+                PVector nextPos = nextNode.position;
+
+                // Calculate direction based on the backtracking node
+                float dx = nextPos.x - tank.position.x;
+                float dy = nextPos.y - tank.position.y;
+
+                // Set direction based on the largest component
+                if (Math.abs(dx) > Math.abs(dy)) {
+                    tank.state = dx > 0 ? 1 : 2; // Right or Left
+                } else {
+                    tank.state = dy > 0 ? 3 : 4; // Down or Up
+                }
+
+                System.out.println("Recovered from border collision, moving to: " + nextPos.x + ", " + nextPos.y);
+                return;
+            }
+        }
+
+        // Regular DFS exploration logic
         float distToCurrentNode = PVector.dist(tank.position, currentNode.position);
         System.out.println("Distance to current node: " + distToCurrentNode);
 
@@ -211,7 +258,6 @@ class ExplorationManager {
                 System.out.println("Direction vector: dx=" + dx + ", dy=" + dy);
 
                 // Determine predominant direction and set tank state accordingly
-                // Use a small threshold to avoid floating point comparison issues
                 if (Math.abs(dx) > Math.abs(dy)) {
                     // Horizontal movement predominant
                     if (dx > 1) {
@@ -220,6 +266,8 @@ class ExplorationManager {
                     } else if (dx < -1) {
                         tank.state = 2; // Move left
                         System.out.println("Auto-moving LEFT");
+                    } else {
+                        tank.state = 0; // Stop if we're very close
                     }
                 } else {
                     // Vertical movement predominant
@@ -229,30 +277,40 @@ class ExplorationManager {
                     } else if (dy < -1) {
                         tank.state = 4; // Move up
                         System.out.println("Auto-moving UP");
+                    } else {
+                        tank.state = 0; // Stop if we're very close
                     }
                 }
             } else {
                 // No valid next position, stop the tank
                 tank.state = 0;
                 System.out.println("No valid next position, stopping tank");
+                // Optionally disable auto-explore if exploration is complete
+                if (dfsStack.isEmpty()) {
+                    autoExplore = false;
+                    System.out.println("Exploration complete, auto-explore disabled");
+                }
             }
-        } else {
-            // Tank is still moving toward the current node, continue current direction
-            System.out.println("Still moving toward current node");
         }
     }
 
-    // Get next position to explore based on DFS
     PVector getNextDFSPosition() {
-        if (dfsStack.isEmpty() || currentNode == null) {
-            System.out.println("DFS stack empty or current node null");
+        if (dfsStack.isEmpty()) {
+            System.out.println("DFS stack empty");
+            return null;
+        }
+
+        if (currentNode == null) {
+            System.out.println("Current node is null");
             return null;
         }
 
         System.out.println("Current node position: " + currentNode.position.x + ", " + currentNode.position.y);
 
+        // Mark the current node as visited since we're processing it
+        currentNode.markVisited();
+
         // Define the four possible moves in a specific order (right, down, left, up)
-        // This order matters for DFS behavior
         PVector[] moves = new PVector[4];
         moves[0] = new PVector(currentNode.position.x + stepSize, currentNode.position.y); // Right
         moves[1] = new PVector(currentNode.position.x, currentNode.position.y + stepSize); // Down
@@ -267,30 +325,28 @@ class ExplorationManager {
             }
 
             // Check for obstacle collisions (trees)
-            boolean isObstacle = false;
-            // Add code here to check for tree collisions if needed
-
+            boolean isObstacle = checkForObstacle(newPos);
             if (isObstacle) {
                 continue;
             }
 
-            // Check if this position has already been visited using a more forgiving distance check
-            boolean hasNode = false;
+            // Check if this position has already been visited
+            boolean hasVisitedNode = false;
+            Node existingNode = null;
+
             for (Node node : nodes) {
                 if (PVector.dist(node.position, newPos) < stepSize/2) {
-                    hasNode = true;
-                    // If there's a node but it's not visited, we can still go there
-                    if (!node.visited) {
-                        System.out.println("Found unvisited existing node at: " + newPos.x + ", " + newPos.y);
-                        return newPos;
+                    existingNode = node;
+                    if (node.visited) {
+                        hasVisitedNode = true;
                     }
                     break;
                 }
             }
 
-            // If no node exists at this position, it's a valid unexplored position
-            if (!hasNode) {
-                System.out.println("Found unexplored position at: " + newPos.x + ", " + newPos.y);
+            // If there's no node or the node exists but hasn't been visited
+            if (existingNode == null || !hasVisitedNode) {
+                System.out.println("Found direction to explore at: " + newPos.x + ", " + newPos.y);
                 return newPos;
             }
         }
@@ -300,11 +356,15 @@ class ExplorationManager {
         System.out.println("No unexplored positions found, need to backtrack");
 
         // Remove current node from stack to backtrack
-        if (dfsStack.size() > 1) {
-            dfsStack.pop();
-            Node backtrackNode = dfsStack.peek();
-            System.out.println("Backtracking to: " + backtrackNode.position.x + ", " + backtrackNode.position.y);
-            return backtrackNode.position;
+        if (!dfsStack.isEmpty()) {
+            dfsStack.pop(); // Remove current node
+
+            // If there are more nodes to explore
+            if (!dfsStack.isEmpty()) {
+                Node backtrackNode = dfsStack.peek();
+                System.out.println("Backtracking to: " + backtrackNode.position.x + ", " + backtrackNode.position.y);
+                return backtrackNode.position;
+            }
         }
 
         // If we can't backtrack further, exploration is complete
@@ -319,6 +379,31 @@ class ExplorationManager {
         } else {
             parent.println("Auto-exploration disabled");
         }
+    }
+    // Add this helper method to check for obstacles
+    boolean checkForObstacle(PVector pos) {
+        // This will check if there's a tree or other obstacle at the given position
+        // For now, a simple implementation that assumes Tank.checkForCollisions() handles this
+        // You can enhance this with actual collision detection with obstacles
+
+        // Example obstacle check (you need to implement based on your game's objects)
+        // For trees, you could do something like:
+
+        if (parent instanceof tanks_bas_v1_0) {
+            tanks_bas_v1_0 game = (tanks_bas_v1_0) parent;
+            if (game.allTrees != null) {
+                for (Tree tree : game.allTrees) {
+                    if (tree != null) {
+                        float dist = PVector.dist(pos, tree.position);
+                        if (dist < tree.radius + stepSize/2) {
+                            return true; // There's an obstacle
+                        }
+                    }
+                }
+            }
+        }
+
+        return false;
     }
 
     void updateFog() {

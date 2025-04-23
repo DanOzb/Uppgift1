@@ -70,7 +70,7 @@ class Tank {
     }
 
     // Border collision logic
-    void borders() {
+    void borders() { //TODO: den här förstör autoexploration just nu, måste fixas
         float r = diameter/2;
         if (position.x + r > parent.width) { //Höger border
             position.x = parent.width - r;
