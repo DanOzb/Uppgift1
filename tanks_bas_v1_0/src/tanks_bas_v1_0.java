@@ -121,6 +121,11 @@ public class tanks_bas_v1_0 extends PApplet{
 
   //======================================
   void checkForInput() {
+    if (explorationManager.isAutoExploreActive()) {
+      // Don't override tank state when in auto-explore mode
+      return;
+    }
+
     if (right) {
       tank0.state=1;
     } else if (left) {
@@ -130,9 +135,10 @@ public class tanks_bas_v1_0 extends PApplet{
     } else if (up) {
       tank0.state=4;
     } else {
-      tank0.state=0; // Stop if no keys are pressed
+      tank0.state=0; // Only reset to 0 if no keys are pressed AND not in auto-explore
     }
   }
+
 
   //======================================
   void updateTanksLogic() {
