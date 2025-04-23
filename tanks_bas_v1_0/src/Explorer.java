@@ -9,17 +9,16 @@ public class Explorer {
     ArrayList<Node> nodes;
     ArrayList<PVector> path;
     ArrayList<Node> stack;  // Stack for DFS
-    Tree[] trees;
     float stepSize;
     Environment environment;
+    Tank tank; // Reference to the tank
 
-    Explorer(PApplet parent,float x, float y, float step) {
+    Explorer(PApplet parent, float x, float y, float step) {
         position = new PVector(x, y);
         nodes = new ArrayList<Node>();
         path = new ArrayList<PVector>();
         stack = new ArrayList<Node>();
         stepSize = step;
-        //trees = obs;
         this.parent = parent;
         this.environment = new Environment(parent);
 
@@ -30,6 +29,42 @@ public class Explorer {
 
         // Add the starting node to DFS stack
         stack.add(startNode);
+    }
+
+    // Method to set the tank reference
+    void setTank(Tank tank) {
+        this.tank = tank;
+    }
+
+    // Method to update explorer position based on tank position
+    void updatePosition() {
+        if (tank != null) {
+            // Check if tank has moved to a new grid position
+            float gridX = Math.round(tank.position.x / stepSize) * stepSize;
+            float gridY = Math.round(tank.position.y / stepSize) * stepSize;
+            PVector gridPos = new PVector(gridX, gridY);
+
+            // Update explorer position if it's different
+            if (PVector.dist(position, gridPos) > 1) {
+                position = gridPos.copy();
+                // If this is a new position, add it to the path
+                if (!hasNodeAt(position)) {
+                    Node newNode = new Node(parent, position.x, position.y);
+                    nodes.add(newNode);
+                    path.add(position.copy());
+
+                    // Connect to previous node if possible
+                    if (!stack.isEmpty()) {
+                        Node prevNode = stack.get(stack.size() - 1);
+                        prevNode.addNeighbor(newNode);
+                        newNode.addNeighbor(prevNode);
+                    }
+
+                    // Add to stack
+                    stack.add(newNode);
+                }
+            }
+        }
     }
 
     Node getNodeAt(PVector pos) {
@@ -56,6 +91,9 @@ public class Explorer {
     }
 
     void exploreDFS() {
+        // First update position to match tank's movement
+        updatePosition();
+
         if (stack.isEmpty()) {
             return;  // Exploration complete
         }
@@ -73,39 +111,47 @@ public class Explorer {
 
         for (PVector newPos : possibleMoves) {
             // Skip if out of bounds
-            if (newPos.x < 0 || newPos.x >= 800 || newPos.y < 0 || newPos.y >= 800) {
+            if (newPos.x < 0 || newPos.x >= parent.width || newPos.y < 0 || newPos.y >= parent.height) {
                 continue;
             }
-
-            // Skip if position is an obstacle
-//            if (isTree(newPos)) {
-//                continue;
-//            }
 
             // Check if there's already a node at this position
             Node existingNode = getNodeAt(newPos);
 
             if (existingNode == null) {
                 // Create a new node at this position
-                Node newNode = environment.createNode(newPos.x, newPos.y);
-                environment.setPosition(newNode);
-                newNode.display();
-                System.out.println("node placed");
+                Node newNode = new Node(parent, newPos.x, newPos.y);
                 nodes.add(newNode);
 
                 // Connect the nodes
                 current.addNeighbor(newNode);
                 newNode.addNeighbor(current);
 
+                // Add edge connections
+                current.addEdge(newNode, PVector.dist(current.position, newNode.position));
+
                 // Add to DFS stack and move there
                 stack.add(newNode);
                 path.add(newPos.copy());
                 foundNewNode = true;
+                parent.println("New node placed at: " + newPos.x + ", " + newPos.y);
                 break;
             } else if (!existingNode.visited) {
                 // Connect existing unvisited node
                 current.addNeighbor(existingNode);
                 existingNode.addNeighbor(current);
+
+                // Add edge connections if they don't exist
+                boolean edgeExists = false;
+                for (Edge edge : current.edges) {
+                    if (edge.destination == existingNode) {
+                        edgeExists = true;
+                        break;
+                    }
+                }
+                if (!edgeExists) {
+                    current.addEdge(existingNode, PVector.dist(current.position, existingNode.position));
+                }
 
                 // Add to DFS stack and move there
                 stack.add(existingNode);
@@ -127,10 +173,11 @@ public class Explorer {
             }
         }
     }
+
     void display() {
-
+        // Display all nodes and edges
+        for (Node node : nodes) {
+            node.display();
+        }
     }
-
-
-
 }

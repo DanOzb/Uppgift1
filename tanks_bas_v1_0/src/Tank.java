@@ -16,13 +16,11 @@ class Tank {
     float speed;
     float maxspeed;
 
-
     float fieldOfView;
     int state;
     boolean isInTransition;
 
     Environment environment;
-    Explorer explorer;
 
     // Constructor
     Tank(PApplet parent, String _name, PVector _startpos, float _size, int _col ) {
@@ -39,14 +37,13 @@ class Tank {
 
         this.state        = 0; // 0(still), 1(moving)
         this.speed        = 10;
-        this.maxspeed     = 30;
+        this.maxspeed     = 5;  // Reduced maxspeed to make DFS more visible
         this.isInTransition = false;
 
         this.fieldOfView = 100.0f;
 
         environment = new Environment(parent);
         environment.setPosition(environment.createNode(this.position.x, this.position.y));
-
     }
 
     //======================================
@@ -63,6 +60,7 @@ class Tank {
             }
         }
     }
+
     void checkForCollisions(Tank tank){
         // Implement collision logic
     }
@@ -101,7 +99,7 @@ class Tank {
         //parent.println("*** Tank.moveForward()");
 
         if (this.velocity.x < this.maxspeed) {
-            this.velocity.x += 0.01;
+            this.velocity.x += 0.1;
         } else {
             this.velocity.x = this.maxspeed;
         }
@@ -111,7 +109,7 @@ class Tank {
         //parent.println("*** Tank.moveBackward()");
 
         if (this.velocity.x > -this.maxspeed) {
-            this.velocity.x -= 0.01;
+            this.velocity.x -= 0.1;
         } else {
             this.velocity.x = -this.maxspeed;
         }
@@ -120,23 +118,8 @@ class Tank {
     void stopMoving() {
         //parent.println("*** Tank.stopMoving()");
         this.velocity.x = 0;
+        this.velocity.y = 0;
     }
-
-    // Handle actions like move, stop, etc.
-//    void action(String _action) {
-//        parent.println("*** Tank.action()");
-//        switch (_action) {
-//            case "move":
-//                moveForward();
-//                break;
-//            case "reverse":
-//                moveBackward();
-//                break;
-//            case "stop":
-//                stopMoving();
-//                break;
-//        }
-//    }
 
     // Update tank's movement logic
     void update() {
@@ -163,24 +146,22 @@ class Tank {
     }
 
     private void moveUpwards() {
-        parent.println("*** Tank.moveDownwards()");
+        //parent.println("*** Tank.moveDownwards()");
         if (this.velocity.y > -this.maxspeed) {
-            this.velocity.y -= 0.01;
+            this.velocity.y -= 0.1;
         } else {
             this.velocity.y = -this.maxspeed;
         }
-
     }
 
     private void moveDownwards() {
-        parent.println("*** Tank.moveUpwards()");
+        //parent.println("*** Tank.moveUpwards()");
 
         if (this.velocity.y < this.maxspeed) {
-            this.velocity.y += 0.01;
+            this.velocity.y += 0.1;
         } else {
             this.velocity.y = this.maxspeed;
         }
-
     }
 
     // Draw the tank's visual representation
@@ -219,7 +200,7 @@ class Tank {
         parent.rect(0 + 25, 0 - 25, 100, 40);  // Displaying info above the tank
         parent.fill(30);
         parent.textSize(15);
-        parent.text(this.name + "\n( " + this.position.x + ", " + this.position.y + " )", 25 + 5, -5 - 5);
+        parent.text(this.name + "\n( " + (int)this.position.x + ", " + (int)this.position.y + " )", 25 + 5, -5 - 5);
 
         parent.popMatrix();  // Revert transformations
     }

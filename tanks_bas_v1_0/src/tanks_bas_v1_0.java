@@ -5,10 +5,9 @@ public class tanks_bas_v1_0 extends PApplet{
 // Variabelnamn har satts för att försöka överensstämma med exempelkoden.
 // Klassen Tank är minimal och skickas mer med som koncept(anrop/states/vektorer).
 
-  Fog fog;
+  ExplorationManager explorationManager;
   boolean left, right, up, down;
   boolean mouse_pressed;
-  Explorer explorer;
 
   PImage tree_img;
   PVector tree1_pos, tree2_pos, tree3_pos;
@@ -90,10 +89,10 @@ public class tanks_bas_v1_0 extends PApplet{
     allTanks[4] = tank4;
     allTanks[5] = tank5;
 
-    fog = new Fog(this);
-    fog.initialize();// Initialize fog after window is properly sized
-
-    explorer = new Explorer(this,tank0.startpos.x,tank0.startpos.y,50f);
+    // Create the exploration manager with a step size of 50
+    explorationManager = new ExplorationManager(this, 50f);
+    explorationManager.initialize();
+    explorationManager.setTank(tank0);
   }
 
   public void draw()
@@ -102,47 +101,26 @@ public class tanks_bas_v1_0 extends PApplet{
     checkForInput(); // Kontrollera inmatning.
 
     if (!gameOver && !pause) {
-
       // UPDATE LOGIC
       updateTanksLogic();
-
       // CHECK FOR COLLISIONS
       checkForCollisions();
 
+      // Update exploration
+      explorationManager.updateTankPosition();
+      explorationManager.exploreDFS();
     }
 
     // UPDATE DISPLAY
     displayHomeBase();
     displayTrees();
+    explorationManager.display(); // This displays both nodes and fog
     displayTanks();
     displayGUI();
-    explorer.exploreDFS();
-    displayNodes();
-
-    displayFog();
-
-
-  }
-
-  private void displayNodes() {
-    for (Node node : fog.environment.nodes) {
-      node.display();
-    }
   }
 
   //======================================
   void checkForInput() {
-
-//    if (up) {
-//      if (!pause && !gameOver) {
-//        //up
-//      }
-//    } else
-//    if (down) {
-//      if (!pause && !gameOver) {
-//      }
-//    }
-
     if (right) {
       tank0.state=1;
     } else if (left) {
@@ -151,17 +129,14 @@ public class tanks_bas_v1_0 extends PApplet{
       tank0.state = 3;
     } else if (up) {
       tank0.state=4;
+    } else {
+      tank0.state=0; // Stop if no keys are pressed
     }
-
-    //if (!up && !down) {
-      //tank0.state=0;
-    //}
   }
 
   //======================================
   void updateTanksLogic() {
     tank0.update();
-    explorer.exploreDFS();
   }
 
   void checkForCollisions() {
@@ -174,7 +149,7 @@ public class tanks_bas_v1_0 extends PApplet{
   }
 
   //======================================
-// Följande bör ligga i klassen Team
+  // Följande bör ligga i klassen Team
   void displayHomeBase() {
     strokeWeight(1);
 
@@ -204,19 +179,11 @@ public class tanks_bas_v1_0 extends PApplet{
     }
   }
 
-
-  void displayFog() {
-    // No need to resetFog() anymore
-    // Just clear around tank and display
-    fog.clearAroundTank(tank0);
-    fog.display();
-  }
-
   void displayGUI() {
     if (pause) {
       textSize(36);
       fill(30);
-      text("...Paused! (\'p\'-continues)\n(upp/ner-change velocity)", (float) (width/1.7-100), (float) (height/2.5));
+      text("...Paused! (\'p\'-continues)\n(arrow keys-change direction)", (float) (width/1.7-100), (float) (height/2.5));
     }
 
     if (gameOver) {
@@ -228,8 +195,6 @@ public class tanks_bas_v1_0 extends PApplet{
 
   //======================================
   public void keyPressed() {
-    //System.out.println("keyPressed!");
-
     if (key == CODED) {
       switch(keyCode) {
         case LEFT:
@@ -246,11 +211,9 @@ public class tanks_bas_v1_0 extends PApplet{
           break;
       }
     }
-
   }
 
   public void keyReleased() {
-    //System.out.println("keyReleased!");
     if (key == CODED) {
       switch(keyCode) {
         case LEFT:
@@ -261,18 +224,20 @@ public class tanks_bas_v1_0 extends PApplet{
           break;
         case UP:
           up = false;
-          //tank0.stopMoving();
           break;
         case DOWN:
           down = false;
-          //tank0.stopMoving();
           break;
       }
-
     }
 
     if (key == 'p') {
       pause = !pause;
+    }
+
+    if (key == 'a') {
+      // Toggle auto-exploration mode
+      explorationManager.toggleAutoExplore();
     }
   }
 
@@ -280,9 +245,7 @@ public class tanks_bas_v1_0 extends PApplet{
   public void mousePressed() {
     println("---------------------------------------------------------");
     println("*** mousePressed() - Musknappen har tryckts ned.");
-
     mouse_pressed = true;
-
   }
 
   public static void main(String[] passedArgs) {
@@ -292,7 +255,5 @@ public class tanks_bas_v1_0 extends PApplet{
     } else {
       PApplet.main(appletArgs);
     }
-
   }
-
 }

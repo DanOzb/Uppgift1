@@ -9,12 +9,14 @@ class Node {
     ArrayList<Edge> edges;
     boolean visited;
     int visitCount;
+    ArrayList<Node> neighbors;
 
     Node(PApplet parent, float x, float y){
         this.parent = parent;
         position = new PVector(x, y);
         edges = new ArrayList<>();
-        //visited = false;
+        neighbors = new ArrayList<>();  // Initialize neighbors ArrayList
+        visited = false;  // Initialize visited flag
         visitCount = 0;
     }
 
@@ -33,13 +35,21 @@ class Node {
         parent.fill(visited ? parent.color(150, 200, 150) : parent.color(200, 150, 150));
         parent.ellipse(position.x, position.y, 20, 20);
 
+        // Display connections
+        parent.strokeWeight(2);
         for(Edge edge : edges){
             parent.stroke(100, 100, 200);
             parent.line(position.x, position.y, edge.destination.position.x, edge.destination.position.y);
         }
+        parent.strokeWeight(1);
     }
 
-
-    public void addNeighbor(Node newNode) {
+    void addNeighbor(Node neighbor) {
+        if (neighbors == null) {
+            neighbors = new ArrayList<>();
+        }
+        if (!neighbors.contains(neighbor)) {
+            neighbors.add(neighbor);
+        }
     }
 }
