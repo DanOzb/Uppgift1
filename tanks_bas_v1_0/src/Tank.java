@@ -37,8 +37,8 @@ class Tank {
         this.acceleration = new PVector(0, 0);
 
         this.state        = 0; // 0(still), 1(moving)
-        this.speed        = 1;
-        this.maxspeed     = 3;
+        this.speed        = 10;
+        this.maxspeed     = 30;
         this.isInTransition = false;
 
         this.fieldOfView = 100.0f;
@@ -72,24 +72,24 @@ class Tank {
     // Border collision logic
     void borders() {
         float r = diameter/2;
-        if (position.x + r > parent.width) {
+        if (position.x + r > parent.width) { //Höger border
             position.x = parent.width - r;
             velocity.x = 0;
-            velocity.y = 0;
+            velocity.y = 10;
         }
-        if (position.y + r > parent.height) {
+        if (position.y + r > parent.height) { //Botten border
             position.y = parent.height - r;
             velocity.y = 0;
-            velocity.x = 0;
+            velocity.x = -10;
         }
-        if (position.x - r < 0) {
+        if (position.x - r < 0) { //Vänster border
             position.x = r;
             velocity.x = 0;
-            velocity.y = 0;
+            velocity.y = 10;
         }
-        if (position.y - r < 0) {
+        if (position.y - r < 0) { //Top border
             position.y = r;
-            velocity.y = 0;
+            velocity.y = -10;
             velocity.x = 0;
         }
     }
