@@ -149,21 +149,122 @@ class Tank {
         return false;
     }
 
+    boolean willHitEnemyBase(PVector futurePosition) {
+        // Team 0 tanks (red) can't enter Team 1 base (blue)
+        if (col == parent.color(204, 50, 50)) { // Team 0 color
+            // Check if future position would be in Team 1 base area
+            return (futurePosition.x >= parent.width - 151 && futurePosition.y >= parent.height - 351);
+        }
+        // Team 1 tanks (blue) can't enter Team 0 base (red)
+        else if (col == parent.color(0, 150, 200)) { // Team 1 color
+            // Check if future position would be in Team 0 base area
+            return (futurePosition.x <= 150 && futurePosition.y <= 350);
+        }
+        return false;
+    }
+
     void checkBaseCollisions() {
+        // First check if we're already in an enemy base (shouldn't happen, but just in case)
         if (isInEnemyBase()) {
-            // For Team 0 tanks trying to enter Team 1 base
+            // Calculate nearest valid position outside the enemy base
+            PVector safePosition = new PVector(position.x, position.y);
+
+            // For Team 0 tanks (red) in Team 1 base (blue)
             if (col == parent.color(204, 50, 50)) {
-                if (position.x > parent.width - 151) position.x = parent.width - 151;
-                if (position.y > parent.height - 351) position.y = parent.height - 351;
+                // Check which boundary is closest and move there
+                float distToLeftBoundary = position.x - (parent.width - 151);
+                float distToTopBoundary = position.y - (parent.height - 351);
+
+                if (Math.abs(distToLeftBoundary) < Math.abs(distToTopBoundary)) {
+                    // Closer to left boundary
+                    safePosition.x = parent.width - 151 - 5; // Small extra margin
+                } else {
+                    // Closer to top boundary
+                    safePosition.y = parent.height - 351 - 5; // Small extra margin
+                }
             }
-            // For Team 1 tanks trying to enter Team 0 base
+            // For Team 1 tanks (blue) in Team 0 base (red)
             else if (col == parent.color(0, 150, 200)) {
-                if (position.x < 150) position.x = 150;
-                if (position.y < 350) position.y = 350;
+                // Check which boundary is closest and move there
+                float distToRightBoundary = 150 - position.x;
+                float distToBottomBoundary = 350 - position.y;
+
+                if (Math.abs(distToRightBoundary) < Math.abs(distToBottomBoundary)) {
+                    // Closer to right boundary
+                    safePosition.x = 150 + 5; // Small extra margin
+                } else {
+                    // Closer to bottom boundary
+                    safePosition.y = 350 + 5; // Small extra margin
+                }
             }
 
-            // Stop the tank's movement in this direction
+            // Apply the safe position
+            position = safePosition;
+
+            // Stop the tank's momentum
             velocity.mult(0);
+            parent.println(name + " was in enemy base and moved to safety");
+            return;
+        }
+
+        // Now check for potential collisions with base boundaries
+        PVector futurePosition = PVector.add(position, velocity);
+        boolean willCollide = false;
+
+        // Team 0 tanks (red) hitting Team 1 base (blue)
+        if (col == parent.color(204, 50, 50)) {
+            if (futurePosition.x >= parent.width - 151 && position.y >= parent.height - 351) {
+                // Will hit left boundary of blue base
+                velocity.x = 0;
+                position.x = parent.width - 151 - 1;
+                willCollide = true;
+            }
+            if (futurePosition.y >= parent.height - 351 && position.x >= parent.width - 151) {
+                // Will hit top boundary of blue base
+                velocity.y = 0;
+                position.y = parent.height - 351 - 1;
+                willCollide = true;
+            }
+            // Handle corner approach
+            if (futurePosition.x >= parent.width - 151 && futurePosition.y >= parent.height - 351 &&
+                    position.x < parent.width - 151 && position.y < parent.height - 351) {
+                // Approaching the corner - stop both directions
+                velocity.mult(0);
+                willCollide = true;
+            }
+        }
+        // Team 1 tanks (blue) hitting Team 0 base (red)
+        else if (col == parent.color(0, 150, 200)) {
+            if (futurePosition.x <= 150 && position.y <= 350) {
+                // Will hit right boundary of red base
+                velocity.x = 0;
+                position.x = 150 + 1;
+                willCollide = true;
+            }
+            if (futurePosition.y <= 350 && position.x <= 150) {
+                // Will hit bottom boundary of red base
+                velocity.y = 0;
+                position.y = 350 + 1;
+                willCollide = true;
+            }
+            // Handle corner approach
+            if (futurePosition.x <= 150 && futurePosition.y <= 350 &&
+                    position.x > 150 && position.y > 350) {
+                // Approaching the corner - stop both directions
+                velocity.mult(0);
+                willCollide = true;
+            }
+        }
+
+        if (willCollide) {
+            // Notify the exploration manager if applicable
+            if (parent instanceof tanks_bas_v1_0) {
+                tanks_bas_v1_0 game = (tanks_bas_v1_0) parent;
+                if (game.explorationManager != null &&
+                        game.explorationManager.isAutoExploreActive()) {
+                    game.explorationManager.handleBorderCollision();
+                }
+            }
             parent.println(name + " attempted to enter enemy base and was blocked");
         }
     }
@@ -239,8 +340,31 @@ class Tank {
                 break;
         }
 
-        // Apply velocity to position
-        position.add(velocity);
+        PVector futurePosition = PVector.add(position, velocity);
+
+        // Check if future position would be valid
+        boolean validMove = true;
+
+        // Team 0 tanks (red) approaching Team 1 base (blue)
+        if (col == parent.color(204, 50, 50)) {
+            if (futurePosition.x >= parent.width - 151 && futurePosition.y >= parent.height - 351) {
+                validMove = false;
+            }
+        }
+        // Team 1 tanks (blue) approaching Team 0 base (red)
+        else if (col == parent.color(0, 150, 200)) {
+            if (futurePosition.x <= 150 && futurePosition.y <= 350) {
+                validMove = false;
+            }
+        }
+
+        // Only move if it's a valid position
+        if (validMove) {
+            position.add(velocity);
+        } else {
+            // The base collision handling will take care of adjusting position and velocity
+            checkBaseCollisions();
+        }
     }
 
 

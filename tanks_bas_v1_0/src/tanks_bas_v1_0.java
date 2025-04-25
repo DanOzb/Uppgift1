@@ -171,9 +171,15 @@ public class tanks_bas_v1_0 extends PApplet{
   }
 
   void checkForCollisions() {
-    //println("*** checkForCollisions()");
+    // Check for base collisions first
+    for (int i = 0; i < allTanks.length; i++) {
+      if (allTanks[i] != null) {
+        // Check for enemy base collisions first
+        allTanks[i].checkBaseCollisions();
+      }
+    }
 
-    // Check tank-to-tank collisions
+    // Then check for other collisions
     for (int i = 0; i < allTanks.length; i++) {
       // Skip if tank is null
       if (allTanks[i] == null) continue;
@@ -190,11 +196,9 @@ public class tanks_bas_v1_0 extends PApplet{
 
       // Check for map border collisions
       allTanks[i].checkForCollisions(new PVector(width, height));
-
-      // Check for enemy base collisions
-      allTanks[i].checkBaseCollisions();
     }
   }
+
 
   //======================================
   // Följande bör ligga i klassen Team
