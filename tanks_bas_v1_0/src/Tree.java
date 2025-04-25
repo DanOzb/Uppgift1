@@ -38,11 +38,14 @@ class Tree {
             float overlap = minDistance - distanceVecMag;
 
             // If distanceVecMag is too small (zero or near zero), use a default direction
-            if (distanceVecMag < 0.1f) {
+            if (distanceVecMag < 1f) {
+                System.out.println("slowed down?");
                 // Default direction away from the center of the tree
                 distanceVect = new PVector(1, 0);  // arbitrary default direction
+
             } else {
                 // Normalize the direction vector
+                System.out.println("slowed down?22");
                 distanceVect.normalize();
             }
 

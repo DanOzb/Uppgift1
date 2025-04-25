@@ -1,37 +1,36 @@
 import processing.core.*;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.Stack;
-import java.util.Random;
+
+import java.util.*;
 
 class ExplorationManager {
-    private PApplet parent;
+    PApplet parent;
 
     // Fog-related properties
-    private PGraphics fogLayer;
-    private int fogColor;
-    private int fogAlpha;
-    private boolean initialized;
-    private ArrayList<PVector> visitedPositions;
+    PGraphics fogLayer;
+    int fogColor;
+    int fogAlpha;
+    boolean initialized;
+    ArrayList<PVector> visitedPositions;
 
     // Explorer-related properties
-    private ArrayList<Node> nodes;
-    private ArrayList<Edge> edges;
-    private Node currentNode;
-    private Node targetNode;
-    private ArrayList<PVector> path;
-    private Random random;
+    ArrayList<Node> nodes;
+    ArrayList<Edge> edges;
+    Node currentNode;
+    Node targetNode;
+    Node baseNode; //to return home
+    ArrayList<PVector> path;
+    Random random;
 
     // Shared properties
-    private Tank tank;
-    private boolean autoExplore;
-    private float visibilityRadius;
-    private float minNodeDistance;
-    private float maxNodeDistance;
-    private PVector previousDirection;
-    private int stuckCounter;
-    private PVector lastPosition;
-    private int samePositionCounter;
+    Tank tank;
+    boolean autoExplore;
+    float visibilityRadius;
+    float minNodeDistance;
+    float maxNodeDistance;
+    PVector previousDirection;
+    int stuckCounter;
+    PVector lastPosition;
+    int samePositionCounter;
 
     int clearedPixels;
     int totalPixels;
@@ -41,7 +40,8 @@ class ExplorationManager {
     private enum NavigationState {
         EXPLORING,
         MOVING_TO_TARGET,
-        BACKTRACKING
+        BACKTRACKING,
+        RETURNING_HOME
     }
 
     private NavigationState navState;
@@ -78,6 +78,7 @@ class ExplorationManager {
             Node startNode = new Node(parent, tank.position.x, tank.position.y);
             nodes.add(startNode);
             currentNode = startNode;
+            baseNode = startNode;
             lastPosition = tank.position.copy();
 
             // Add this position to visited positions for fog clearing
@@ -113,7 +114,7 @@ class ExplorationManager {
             lastPosition = tank.position.copy();
         }
 
-        // Record visited position for fog clearing
+        // Record visited position for fog clearingb
         PVector currentPos = tank.position.copy();
         boolean alreadyVisited = false;
 
@@ -198,7 +199,6 @@ class ExplorationManager {
     void connectToVisibleNodes(Node node) {
         for (Node other : nodes) {
             if (node == other) continue;
-
             float distance = PVector.dist(node.position, other.position);
             if (distance <= maxNodeDistance && canSee(node.position, other.position)) {
                 connectNodes(node, other, distance);
@@ -263,7 +263,20 @@ class ExplorationManager {
         if (!autoExplore || tank == null) return;
 
         switch (navState) {
+            case RETURNING_HOME:
+                tank.navState = "ReturningHome";
+                if (targetNode == baseNode) {
+                    moveTowardTarget();
+                }
+
+                if (PVector.dist(tank.position, baseNode.position) < 50) {
+                    System.out.println("should be home here");
+                } else {
+                    targetNode = baseNode;
+                }
+                break;
             case EXPLORING:
+                tank.navState = "Exploring";
                 if (targetNode == null || PVector.dist(tank.position, targetNode.position) < 20) {
                     // Find new exploration target
                     targetNode = selectExplorationTarget();
@@ -277,11 +290,13 @@ class ExplorationManager {
                 break;
 
             case MOVING_TO_TARGET:
+                tank.navState = "MovingToTarget";
                 // Move toward target node
                 moveTowardTarget();
                 break;
 
             case BACKTRACKING:
+                tank.navState = "Backtracking";
                 // We're stuck, backtrack to known territory
                 if (currentNode != null && targetNode != null) {
                     moveTowardTarget();
@@ -434,11 +449,10 @@ class ExplorationManager {
                 }
             }
         }
-
         return true;
     }
 
-    boolean isInHomeBase(PVector position) {
+    boolean isInHomeBase(PVector position) { //TODO: kommer behöva ändra här
         // Check if position is in Team 0 base (red)
         if (position.x <= 150 && position.y <= 350) {
             return true;
@@ -527,6 +541,18 @@ class ExplorationManager {
     void handleBorderCollision() {
         parent.println("Border collision detected - adjusting navigation");
 
+
+        if (navState == NavigationState.RETURNING_HOME) {
+            float randomAngle = random.nextFloat() * PApplet.TWO_PI;
+            PVector direction = new PVector(PApplet.cos(randomAngle), PApplet.sin(randomAngle));
+
+            if (Math.abs(direction.x) > Math.abs(direction.y)) {
+                tank.state = direction.x > 0 ? 1 : 2;
+            } else {
+                tank.state = direction.y > 0 ? 3 : 4;
+            }
+            return;
+        }
         // If we were moving to a target, it might be unreachable
         if (navState == NavigationState.MOVING_TO_TARGET) {
             // Mark current target as potentially unreachable or problematic
@@ -589,6 +615,17 @@ class ExplorationManager {
         if (!tooClose) {
             nodes.add(boundaryNode);
             connectToVisibleNodes(boundaryNode);
+        }
+    }
+
+    void moveTo(Node targetNode) {
+        this.targetNode = targetNode;
+
+        if (targetNode == baseNode) {
+            navState = NavigationState.RETURNING_HOME;
+            System.out.println("Returning home");
+        } else {
+            navState = NavigationState.MOVING_TO_TARGET;
         }
     }
 }

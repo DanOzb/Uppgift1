@@ -9,16 +9,18 @@ class Tank {
 
     PVector startpos;
     String name;
+
+    String navState = "";
     PImage img;
     int col; // Change from 'color', works still
     float diameter;
-
     float speed;
     float maxspeed;
 
     float fieldOfView;
     int state;
     boolean isInTransition;
+    boolean collisionDetected;
 
     Environment environment;
 
@@ -39,6 +41,7 @@ class Tank {
         this.speed        = 1;
         this.maxspeed     = 5;  // Reduced maxspeed to make DFS more visible
         this.isInTransition = false;
+        this.collisionDetected = false;
 
         this.fieldOfView = 100.0f;
 
@@ -52,8 +55,8 @@ class Tank {
         borders();
     }
 
-    void checkForCollisions(Tree... trees) {
-        boolean collisionDetected = false;
+    boolean checkForCollisions(Tree... trees) {
+        collisionDetected = false;
 
         for (Tree tree : trees) {
             if (tree != null && tree.checkCollision(this)) {
@@ -74,6 +77,7 @@ class Tank {
         if (collisionDetected) {
             velocity.mult(0.1f);  // Significant velocity reduction but not complete stop
         }
+        return collisionDetected;
     }
 
     void checkForCollisions(Tank otherTank) {
@@ -257,15 +261,16 @@ class Tank {
         }
 
         if (willCollide) {
-            // Notify the exploration manager if applicable
+            // Get reference to the game
             if (parent instanceof tanks_bas_v1_0) {
                 tanks_bas_v1_0 game = (tanks_bas_v1_0) parent;
-                if (game.explorationManager != null &&
-                        game.explorationManager.isAutoExploreActive()) {
-                    game.explorationManager.handleBorderCollision();
+
+                // If exploration manager exists, tell it to return home
+                if (game.explorationManager != null) {
+                    game.explorationManager.moveTo(game.explorationManager.baseNode);
                 }
             }
-            parent.println(name + " attempted to enter enemy base and was blocked");
+            parent.println(name + " detected enemy base - returning home");
         }
     }
 
