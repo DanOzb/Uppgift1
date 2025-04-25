@@ -59,6 +59,11 @@ public class tanks_bas_v1_0 extends PApplet{
     tree2_pos = new PVector(280, 230);
     tree3_pos = new PVector(530, 520);
 
+    //trees
+    allTrees[0] = new Tree(this, tree_img, tree1_pos.x, tree1_pos.y);
+    allTrees[1] = new Tree(this, tree_img, tree2_pos.x, tree2_pos.y);
+    allTrees[2] = new Tree(this, tree_img, tree3_pos.x, tree3_pos.y);
+
     tank_size = 50;
 
     // Team0
@@ -89,8 +94,8 @@ public class tanks_bas_v1_0 extends PApplet{
     allTanks[4] = tank4;
     allTanks[5] = tank5;
 
-    // Create the exploration manager with a step size of 50
-    explorationManager = new ExplorationManager(this, 50f);
+    // Create the exploration manager with a step size of 25
+    explorationManager = new ExplorationManager(this, 25f);
     explorationManager.initialize();
     explorationManager.setTank(tank0);
   }
@@ -106,9 +111,15 @@ public class tanks_bas_v1_0 extends PApplet{
       // CHECK FOR COLLISIONS
       checkForCollisions();
 
-      // Update exploration
-      explorationManager.updateTankPosition();
-      explorationManager.exploreDFS();
+      if(explorationManager.exploredPercent >= 80){ //ändra senare
+        gameOver = true;
+      }else{
+        // Update exploration
+        explorationManager.updateTankPosition();
+        explorationManager.exploreDFS();
+      }
+
+
     }
 
     // UPDATE DISPLAY
@@ -126,31 +137,62 @@ public class tanks_bas_v1_0 extends PApplet{
       return;
     }
 
-    if (right) {
-      tank0.state=1;
+    // Calculate combined state based on key presses
+    if (right && down) {
+      tank0.state = 5; // Right + Down
+    } else if (right && up) {
+      tank0.state = 6; // Right + Up
+    } else if (left && down) {
+      tank0.state = 7; // Left + Down
+    } else if (left && up) {
+      tank0.state = 8; // Left + Up
+    } else if (right) {
+      tank0.state = 1; // Right
     } else if (left) {
-      tank0.state=2;
+      tank0.state = 2; // Left
     } else if (down) {
-      tank0.state = 3;
+      tank0.state = 3; // Down
     } else if (up) {
-      tank0.state=4;
+      tank0.state = 4; // Up
     } else {
-      tank0.state=0; // Only reset to 0 if no keys are pressed AND not in auto-explore
+      tank0.state = 0; // No keys pressed
     }
   }
 
 
   //======================================
   void updateTanksLogic() {
-    tank0.update();
+    // Update all tanks
+    for (Tank tank : allTanks) {
+      if (tank != null) {
+        tank.update();
+      }
+    }
   }
 
   void checkForCollisions() {
     //println("*** checkForCollisions()");
-    for (Tank tank : allTanks) {
-      tank.checkForCollisions(tank1);
-      tank.checkForCollisions(new PVector(width, height));
-      tank.checkForCollisions(allTrees);
+
+    // Check tank-to-tank collisions
+    for (int i = 0; i < allTanks.length; i++) {
+      // Skip if tank is null
+      if (allTanks[i] == null) continue;
+
+      // Check for collisions with other tanks
+      for (int j = i + 1; j < allTanks.length; j++) {
+        if (allTanks[j] != null) {
+          allTanks[i].checkForCollisions(allTanks[j]);
+        }
+      }
+
+      // Check for collisions with trees
+      allTanks[i].checkForCollisions(allTrees);
+
+      // Check for map border collisions
+      allTanks[i].checkForCollisions(new PVector(width, height));
+
+      // Check for enemy base collisions
+      allTanks[i].checkBaseCollisions();
     }
   }
 
@@ -168,14 +210,10 @@ public class tanks_bas_v1_0 extends PApplet{
 
   // Följande bör ligga i klassen Tree
   void displayTrees() {
-    allTrees[0] = new Tree(this,tree_img,tree1_pos.x,tree1_pos.y);
-    allTrees[1] = new Tree(this,tree_img,tree2_pos.x,tree2_pos.y);
-    allTrees[2] = new Tree(this,tree_img,tree3_pos.x,tree3_pos.y);
-
-    imageMode(CENTER);
-    image(tree_img, tree1_pos.x, tree1_pos.y);
-    image(tree_img, tree2_pos.x, tree2_pos.y);
-    image(tree_img, tree3_pos.x, tree3_pos.y);
+    for (Tree tree : allTrees) {
+      imageMode(CENTER);
+      image(tree_img, tree.position.x, tree.position.y);
+    }
     imageMode(CORNER);
   }
 

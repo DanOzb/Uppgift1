@@ -36,7 +36,7 @@ class Tank {
         this.acceleration = new PVector(0, 0);
 
         this.state        = 0; // 0(still), 1(moving)
-        this.speed        = 10;
+        this.speed        = 1;
         this.maxspeed     = 5;  // Reduced maxspeed to make DFS more visible
         this.isInTransition = false;
 
@@ -52,47 +52,123 @@ class Tank {
         borders();
     }
 
-    void checkForCollisions(Tree... tree) {
-        for (Tree t : tree) {
-            if (t.checkCollision(this)) {
-                velocity.x = 0;
-                velocity.y = 0;
+    void checkForCollisions(Tree... trees) {
+        boolean collisionDetected = false;
+
+        for (Tree tree : trees) {
+            if (tree != null && tree.checkCollision(this)) {
+                collisionDetected = true;
+
+                // If auto-explore is active, let the exploration manager know
+                if (parent instanceof tanks_bas_v1_0) {
+                    tanks_bas_v1_0 game = (tanks_bas_v1_0) parent;
+                    if (game.explorationManager != null &&
+                            game.explorationManager.isAutoExploreActive()) {
+                        game.explorationManager.handleBorderCollision();
+                    }
+                }
             }
+        }
+
+        // If a collision was detected, temporarily stop the tank's movement
+        if (collisionDetected) {
+            velocity.mult(0.1f);  // Significant velocity reduction but not complete stop
         }
     }
 
-    void checkForCollisions(Tank tank){
-        // Implement collision logic
+    void checkForCollisions(Tank otherTank) {
+        if (otherTank == this) return; // Skip self-collision
+
+        // Check if tanks are from the same team (same color)
+        boolean sameTeam = this.col == otherTank.col;
+
+        PVector distanceVect = PVector.sub(position, otherTank.position);
+        float distanceVecMag = distanceVect.mag();
+        float minDistance = diameter/2 + otherTank.diameter/2;
+
+        if (distanceVecMag < minDistance) {
+            // If same team, stop and change direction instead of pushing
+            if (sameTeam) {
+                // Stop moving
+                velocity.mult(0);
+
+                // Change direction - move away from friendly tank
+                if (Math.abs(distanceVect.x) > Math.abs(distanceVect.y)) {
+                    state = distanceVect.x > 0 ? 1 : 2; // Right or Left
+                } else {
+                    state = distanceVect.y > 0 ? 3 : 4; // Down or Up
+                }
+
+                parent.println(name + " detected friendly " + otherTank.name + " and changed direction");
+                return;
+            }
+
+            // For enemy tanks, continue with normal collision response
+            // Calculate overlap and push direction
+            float overlap = minDistance - distanceVecMag;
+
+            // If tanks are directly on top of each other, use a default direction
+            if (distanceVecMag < 0.1f) {
+                distanceVect = new PVector(1, 0);  // arbitrary default direction
+            } else {
+                distanceVect.normalize();
+            }
+
+            // Push both tanks away from each other
+            position.x += distanceVect.x * overlap * 0.5f;
+            position.y += distanceVect.y * overlap * 0.5f;
+            otherTank.position.x -= distanceVect.x * overlap * 0.5f;
+            otherTank.position.y -= distanceVect.y * overlap * 0.5f;
+
+            // Zero out the velocity component in the collision direction
+            float dotProduct = velocity.x * distanceVect.x + velocity.y * distanceVect.y;
+            if (dotProduct < 0) {
+                velocity.x -= dotProduct * distanceVect.x;
+                velocity.y -= dotProduct * distanceVect.y;
+            }
+
+            parent.println("Tank collision detected between " + name + " and " + otherTank.name);
+        }
     }
 
     void checkForCollisions(PVector vec) {
         checkEnvironment();
     }
 
-    // Border collision logic
-    void borders() { //TODO: den här förstör autoexploration just nu, måste fixas
-        float r = diameter/2;
-        if (position.x + r > parent.width) { //Höger border
-            position.x = parent.width - r;
-            velocity.x = 0;
-            velocity.y = 10;
+    boolean isInEnemyBase() {
+        // Team 0 tanks (red) can't enter Team 1 base (blue)
+        if (col == parent.color(204, 50, 50)) { // Team 0 color
+            // Check if in Team 1 base area
+            return (position.x >= parent.width - 151 && position.y >= parent.height - 351);
         }
-        if (position.y + r > parent.height) { //Botten border
-            position.y = parent.height - r;
-            velocity.y = 0;
-            velocity.x = -10;
+        // Team 1 tanks (blue) can't enter Team 0 base (red)
+        else if (col == parent.color(0, 150, 200)) { // Team 1 color
+            // Check if in Team 0 base area
+            return (position.x <= 150 && position.y <= 350);
         }
-        if (position.x - r < 0) { //Vänster border
-            position.x = r;
-            velocity.x = 0;
-            velocity.y = 10;
-        }
-        if (position.y - r < 0) { //Top border
-            position.y = r;
-            velocity.y = -10;
-            velocity.x = 0;
+        return false;
+    }
+
+    void checkBaseCollisions() {
+        if (isInEnemyBase()) {
+            // For Team 0 tanks trying to enter Team 1 base
+            if (col == parent.color(204, 50, 50)) {
+                if (position.x > parent.width - 151) position.x = parent.width - 151;
+                if (position.y > parent.height - 351) position.y = parent.height - 351;
+            }
+            // For Team 1 tanks trying to enter Team 0 base
+            else if (col == parent.color(0, 150, 200)) {
+                if (position.x < 150) position.x = 150;
+                if (position.y < 350) position.y = 350;
+            }
+
+            // Stop the tank's movement in this direction
+            velocity.mult(0);
+            parent.println(name + " attempted to enter enemy base and was blocked");
         }
     }
+
+
 
     // Movement functions
     void moveForward() {
@@ -121,29 +197,52 @@ class Tank {
         this.velocity.y = 0;
     }
 
-    // Update tank's movement logic
+    // In Tank.java - update the update() method:
     void update() {
-        //parent.println("*** Tank.update()");
+        // Update movement based on current state
         switch (state) {
             case 0:
                 // idle
                 stopMoving();
                 break;
             case 1:
-                moveForward();
+                // Move right
+                velocity.x = accelerateTowards(velocity.x, maxspeed);
                 break;
             case 2:
-                moveBackward();
+                // Move left
+                velocity.x = accelerateTowards(velocity.x, -maxspeed);
                 break;
             case 3:
-                moveDownwards();
+                // Move down
+                velocity.y = accelerateTowards(velocity.y, maxspeed);
                 break;
             case 4:
-                moveUpwards();
+                // Move up
+                velocity.y = accelerateTowards(velocity.y, -maxspeed);
+                break;
+            case 5:  // Right + Down (diagonal)
+                velocity.x = accelerateTowards(velocity.x, maxspeed * 0.7071f);
+                velocity.y = accelerateTowards(velocity.y, maxspeed * 0.7071f);
+                break;
+            case 6:  // Right + Up (diagonal)
+                velocity.x = accelerateTowards(velocity.x, maxspeed * 0.7071f);
+                velocity.y = accelerateTowards(velocity.y, -maxspeed * 0.7071f);
+                break;
+            case 7:  // Left + Down (diagonal)
+                velocity.x = accelerateTowards(velocity.x, -maxspeed * 0.7071f);
+                velocity.y = accelerateTowards(velocity.y, maxspeed * 0.7071f);
+                break;
+            case 8:  // Left + Up (diagonal)
+                velocity.x = accelerateTowards(velocity.x, -maxspeed * 0.7071f);
+                velocity.y = accelerateTowards(velocity.y, -maxspeed * 0.7071f);
                 break;
         }
-        this.position.add(velocity);
+
+        // Apply velocity to position
+        position.add(velocity);
     }
+
 
     private void moveUpwards() {
         //parent.println("*** Tank.moveDownwards()");
@@ -213,5 +312,65 @@ class Tank {
 
         parent.fill(col,20);
         parent.ellipse(0, 0, fieldOfView, fieldOfView);
+    }
+
+    // Helper method for smoother acceleration
+    float accelerateTowards(float current, float target) {
+        float acceleration = 0.2f;
+        if (current < target) {
+            return Math.min(current + acceleration, target);
+        } else if (current > target) {
+            return Math.max(current - acceleration, target);
+        }
+        return current;
+    }
+
+    // Helper method for smooth deceleration
+    float decelerate(float current) {
+        float deceleration = 0.3f;
+        if (Math.abs(current) < deceleration) {
+            return 0;
+        } else if (current > 0) {
+            return current - deceleration;
+        } else {
+            return current + deceleration;
+        }
+    }
+
+    void borders() {
+        float r = diameter / 2;
+        boolean collision = false;
+
+        if (position.x + r > parent.width) { // Right border
+            position.x = parent.width - r;
+            velocity.x = -velocity.x * 0.5f; // Bounce with friction
+            collision = true;
+        }
+
+        if (position.y + r > parent.height) { // Bottom border
+            position.y = parent.height - r;
+            velocity.y = -velocity.y * 0.5f; // Bounce with friction
+            collision = true;
+        }
+
+        if (position.x - r < 0) { // Left border
+            position.x = r;
+            velocity.x = -velocity.x * 0.5f; // Bounce with friction
+            collision = true;
+        }
+
+        if (position.y - r < 0) { // Top border
+            position.y = r;
+            velocity.y = -velocity.y * 0.5f; // Bounce with friction
+            collision = true;
+        }
+
+        if (collision && parent instanceof tanks_bas_v1_0) {
+            tanks_bas_v1_0 game = (tanks_bas_v1_0) parent;
+            if (game.explorationManager != null) {
+                // Notify exploration manager of the collision
+                game.explorationManager.handleBorderCollision();
+            }
+        }
     }
 }

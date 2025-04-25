@@ -9,47 +9,66 @@ class Node {
     ArrayList<Edge> edges;
     boolean visited;
     int visitCount;
-    ArrayList<Node> neighbors;
+
+    // Add exploration metrics
+    float explorationValue;
+    float lastVisitTime;
 
     Node(PApplet parent, float x, float y){
         this.parent = parent;
         position = new PVector(x, y);
         edges = new ArrayList<>();
-        neighbors = new ArrayList<>();  // Initialize neighbors ArrayList
-        visited = false;  // Initialize visited flag
+        visited = false;
         visitCount = 0;
+        explorationValue = 100.0f; // Start with high exploration value
+        lastVisitTime = parent.millis();
     }
 
     void addEdge(Node destination, float weight){
-        edges.add(new Edge(this, destination, weight));
-        destination.edges.add(new Edge(this, destination, weight));
+        // Check if edge already exists
+        boolean edgeExists = false;
+        for (Edge edge : edges) {
+            if (edge.destination == destination) {
+                edgeExists = true;
+                break;
+            }
+        }
+
+        if (!edgeExists) {
+            edges.add(new Edge(this, destination, weight));
+        }
     }
 
     void markVisited(){
         visited = true;
         visitCount++;
+        lastVisitTime = parent.millis();
+        explorationValue = 0; // Reset exploration value upon visit
     }
 
-    //Så att vi kan se vilka noder som har blivit upptäckta
+    float getImportance() {
+        // Higher value = more important to visit
+        // Factors: exploration value, time since last visit, number of edges
+
+        float timeFactor = (parent.millis() - lastVisitTime) / 5000.0f; // Time factor grows over time
+        float edgeFactor = 5.0f / (edges.size() + 1.0f); // Fewer edges = higher value
+
+        return explorationValue + timeFactor + edgeFactor;
+    }
+
     void display(){
-        parent.fill(visited ? parent.color(150, 200, 150) : parent.color(200, 150, 150));
-        parent.ellipse(position.x, position.y, 20, 20);
-
-        // Display connections
-        parent.strokeWeight(2);
-        for(Edge edge : edges){
-            parent.stroke(100, 100, 200);
-            parent.line(position.x, position.y, edge.destination.position.x, edge.destination.position.y);
-        }
-        parent.strokeWeight(1);
+        // This is now handled in ExplorationManager to centralize visualization
+        parent.fill(visited ? parent.color(150, 200, 150) : parent.color(200, 150, 150), 150);
+        parent.noStroke();
+        parent.ellipse(position.x, position.y, 12, 12);
     }
 
-    void addNeighbor(Node neighbor) {
-        if (neighbors == null) {
-            neighbors = new ArrayList<>();
+    boolean isNeighbor(Node other) {
+        for (Edge edge : edges) {
+            if (edge.destination == other) {
+                return true;
+            }
         }
-        if (!neighbors.contains(neighbor)) {
-            neighbors.add(neighbor);
-        }
+        return false;
     }
 }

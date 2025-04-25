@@ -1,6 +1,8 @@
 import processing.core.*;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.Stack;
+import java.util.Random;
 
 class ExplorationManager {
     private PApplet parent;
@@ -13,19 +15,40 @@ class ExplorationManager {
     private ArrayList<PVector> visitedPositions;
 
     // Explorer-related properties
-    private float stepSize;
     private ArrayList<Node> nodes;
-    private Stack<Node> dfsStack;
+    private ArrayList<Edge> edges;
+    private Node currentNode;
+    private Node targetNode;
     private ArrayList<PVector> path;
+    private Random random;
 
     // Shared properties
     private Tank tank;
-    private Node currentNode;
     private boolean autoExplore;
+    private float visibilityRadius;
+    private float minNodeDistance;
+    private float maxNodeDistance;
+    private PVector previousDirection;
+    private int stuckCounter;
+    private PVector lastPosition;
+    private int samePositionCounter;
 
-    ExplorationManager(PApplet parent, float stepSize) {
+    int clearedPixels;
+    int totalPixels;
+    float exploredPercent;
+
+    // Navigation states
+    private enum NavigationState {
+        EXPLORING,
+        MOVING_TO_TARGET,
+        BACKTRACKING
+    }
+
+    private NavigationState navState;
+
+    ExplorationManager(PApplet parent, float visibilityRadius) {
         this.parent = parent;
-        this.stepSize = stepSize;
+        this.visibilityRadius = visibilityRadius;
 
         // Fog initialization
         this.fogColor = parent.color(50, 50, 50);
@@ -35,9 +58,16 @@ class ExplorationManager {
 
         // Explorer initialization
         this.nodes = new ArrayList<Node>();
-        this.dfsStack = new Stack<Node>();
+        this.edges = new ArrayList<Edge>();
         this.path = new ArrayList<PVector>();
+        this.random = new Random();
         this.autoExplore = false;
+        this.minNodeDistance = 50;
+        this.maxNodeDistance = 150;
+        this.previousDirection = new PVector(0, 0);
+        this.stuckCounter = 0;
+        this.samePositionCounter = 0;
+        this.navState = NavigationState.EXPLORING;
     }
 
     void setTank(Tank tank) {
@@ -45,16 +75,13 @@ class ExplorationManager {
 
         // Create starting node at tank's position
         if (tank != null) {
-            float gridX = Math.round(tank.position.x / stepSize) * stepSize;
-            float gridY = Math.round(tank.position.y / stepSize) * stepSize;
-
-            Node startNode = new Node(parent, gridX, gridY);
+            Node startNode = new Node(parent, tank.position.x, tank.position.y);
             nodes.add(startNode);
-            dfsStack.push(startNode);
             currentNode = startNode;
+            lastPosition = tank.position.copy();
 
             // Add this position to visited positions for fog clearing
-            visitedPositions.add(new PVector(gridX, gridY));
+            visitedPositions.add(tank.position.copy());
         }
     }
 
@@ -65,342 +92,361 @@ class ExplorationManager {
             fogLayer.background(fogColor, fogAlpha); // Start with full fog
             fogLayer.endDraw();
             initialized = true;
+            fogLayer.loadPixels();
+            totalPixels = fogLayer.width * fogLayer.height;
+            clearedPixels = 0;
         }
-    }
-
-    Node getNodeAt(PVector pos) {
-        for (Node node : nodes) {
-            if (PVector.dist(node.position, pos) < 1) {
-                return node;
-            }
-        }
-        return null;
-    }
-
-    boolean hasNodeAt(PVector pos) {
-        return getNodeAt(pos) != null;
     }
 
     void updateTankPosition() {
         if (tank == null) return;
 
-        // Get the grid-aligned position of the tank
-        float gridX = Math.round(tank.position.x / stepSize) * stepSize;
-        float gridY = Math.round(tank.position.y / stepSize) * stepSize;
-        PVector gridPos = new PVector(gridX, gridY);
+        // Check if tank has moved since last update
+        if (PVector.dist(tank.position, lastPosition) < 1.0f) {
+            samePositionCounter++;
+            if (samePositionCounter > 60) {  // If stuck for about 1 second (60 frames)
+                handleStuckTank();
+                samePositionCounter = 0;
+            }
+        } else {
+            samePositionCounter = 0;
+            lastPosition = tank.position.copy();
+        }
 
-        // Debug information
-        System.out.println("Tank actual position: " + tank.position.x + ", " + tank.position.y);
-        System.out.println("Tank grid position: " + gridX + ", " + gridY);
+        // Record visited position for fog clearing
+        PVector currentPos = tank.position.copy();
+        boolean alreadyVisited = false;
 
-        // Check if this is a new grid position
-        Node existingNode = null;
-
-        // Look for existing node at this grid position
-        for (Node node : nodes) {
-            if (PVector.dist(node.position, gridPos) < stepSize/2) {
-                existingNode = node;
+        for (PVector pos : visitedPositions) {
+            if (PVector.dist(pos, currentPos) < 30) {
+                alreadyVisited = true;
                 break;
             }
         }
 
-        if (existingNode == null) {
-            // Create a new node at this position
-            System.out.println("Creating new node at: " + gridX + ", " + gridY);
-            Node newNode = new Node(parent, gridX, gridY);
-            nodes.add(newNode);
-
-            // Connect with previous node if available
-            if (currentNode != null) {
-                System.out.println("Connecting to previous node at: " +
-                        currentNode.position.x + ", " + currentNode.position.y);
-                connectNodes(currentNode, newNode);
-            }
-
-            // Update current node
-            currentNode = newNode;
-
-            // If we're in auto-explore mode, add to DFS stack if not already present
-            if (autoExplore && !dfsStackContains(currentNode)) {
-                dfsStack.push(currentNode);
-                System.out.println("Added new node to DFS stack, size now: " + dfsStack.size());
-            }
-
-            // Add to visited positions for fog clearing
-            visitedPositions.add(gridPos.copy());
+        if (!alreadyVisited) {
+            visitedPositions.add(currentPos);
             updateFog();
         }
-        else if (existingNode != currentNode) {
-            // We've moved to an existing node
-            System.out.println("Moved to existing node at: " + gridX + ", " + gridY);
 
-            // Connect with previous node if available and not already connected
-            if (currentNode != null) {
-                boolean alreadyConnected = false;
-                for (Edge edge : currentNode.edges) {
-                    if (edge.destination == existingNode) {
-                        alreadyConnected = true;
-                        break;
+        // Update current node to closest node if very close
+        Node closestNode = findClosestNode(tank.position);
+        if (closestNode != null && PVector.dist(closestNode.position, tank.position) < 20) {
+            currentNode = closestNode;
+        }
+
+        // If we're in unexplored territory, create a new node
+        if (findClosestNode(tank.position) == null ||
+                PVector.dist(findClosestNode(tank.position).position, tank.position) > maxNodeDistance/2) {
+            addNode(tank.position.x, tank.position.y);
+        }
+    }
+
+    void handleStuckTank() {
+        parent.println("Tank appears stuck - changing direction");
+
+        // Generate a random direction to attempt to escape
+        float randomAngle = random.nextFloat() * PApplet.TWO_PI;
+        PVector escapeDirection = new PVector(PApplet.cos(randomAngle), PApplet.sin(randomAngle));
+
+        // Set tank state based on escape direction
+        if (Math.abs(escapeDirection.x) > Math.abs(escapeDirection.y)) {
+            tank.state = escapeDirection.x > 0 ? 1 : 2; // Right or Left
+        } else {
+            tank.state = escapeDirection.y > 0 ? 3 : 4; // Down or Up
+        }
+
+        // Mark the current target as potentially unreachable
+        if (targetNode != null) {
+            navState = NavigationState.EXPLORING; // Reset to exploration mode
+            targetNode = null;
+        }
+    }
+
+    Node findClosestNode(PVector position) {
+        if (nodes.isEmpty()) return null;
+
+        Node closest = null;
+        float minDist = Float.MAX_VALUE;
+
+        for (Node node : nodes) {
+            float dist = PVector.dist(node.position, position);
+            if (dist < minDist) {
+                minDist = dist;
+                closest = node;
+            }
+        }
+
+        return closest;
+    }
+
+    Node addNode(float x, float y) {
+        Node newNode = new Node(parent, x, y);
+        nodes.add(newNode);
+
+        // Try to connect to nearby nodes
+        connectToVisibleNodes(newNode);
+
+        // If this is our current position, update current node
+        if (PVector.dist(newNode.position, tank.position) < 30) {
+            currentNode = newNode;
+        }
+
+        return newNode;
+    }
+
+    void connectToVisibleNodes(Node node) {
+        for (Node other : nodes) {
+            if (node == other) continue;
+
+            float distance = PVector.dist(node.position, other.position);
+            if (distance <= maxNodeDistance && canSee(node.position, other.position)) {
+                connectNodes(node, other, distance);
+            }
+        }
+    }
+
+    boolean canSee(PVector from, PVector to) {
+        // Check if line between points intersects with any obstacles
+        if (parent instanceof tanks_bas_v1_0) {
+            tanks_bas_v1_0 game = (tanks_bas_v1_0) parent;
+            if (game.allTrees != null) {
+                for (Tree tree : game.allTrees) {
+                    if (tree != null) {
+                        // Line-circle intersection test
+                        PVector line = PVector.sub(to, from);
+                        PVector treeToFrom = PVector.sub(from, tree.position);
+
+                        float a = line.dot(line);
+                        float b = 2 * treeToFrom.dot(line);
+                        float c = treeToFrom.dot(treeToFrom) - (tree.radius + 10) * (tree.radius + 10);
+
+                        float discriminant = b * b - 4 * a * c;
+
+                        if (discriminant >= 0) {
+                            // Line intersects circle
+                            float t = (-b - PApplet.sqrt(discriminant)) / (2 * a);
+                            if (t >= 0 && t <= 1) {
+                                return false; // Intersection within segment
+                            }
+                        }
                     }
                 }
-
-                if (!alreadyConnected) {
-                    System.out.println("Connecting existing nodes");
-                    connectNodes(currentNode, existingNode);
-                }
-            }
-
-            // Update current node
-            currentNode = existingNode;
-
-            // If we're in auto-explore mode and this node isn't in the stack, add it
-            if (autoExplore && !dfsStackContains(currentNode)) {
-                dfsStack.push(currentNode);
-                System.out.println("Added existing node to DFS stack, size now: " + dfsStack.size());
             }
         }
-    }
-    boolean dfsStackContains(Node node) {
-        for (Node stackNode : dfsStack) {
-            if (stackNode == node) {
-                return true;
-            }
-        }
-        return false;
+        return true;
     }
 
-    void connectNodes(Node node1, Node node2) {
-        // Check if connection already exists
-        boolean edgeExists = false;
-        for (Edge edge : node1.edges) {
-            if (edge.destination == node2) {
-                edgeExists = true;
-                break;
-            }
-        }
-
-        if (!edgeExists) {
-            // Calculate distance for weight
-            float weight = PVector.dist(node1.position, node2.position);
-            node1.addEdge(node2, weight);
-
-            // Add to path for visualization
-            path.add(node2.position.copy());
-        }
+    void connectNodes(Node node1, Node node2, float weight) {
+        Edge edge = new Edge(node1, node2, weight);
+        edges.add(edge);
+        node1.addEdge(node2, weight);
+        node2.addEdge(node1, weight); // Bidirectional connection
     }
+
     public boolean isAutoExploreActive() {
         return autoExplore;
-    }
-    boolean borderCollisionOccurred = false;
-
-    void handleBorderCollision() {
-        borderCollisionOccurred = true;
-        System.out.println("Border collision detected, will recalculate path");
-
-        // Force the current node to be marked as fully explored
-        if (currentNode != null) {
-            // Mark all directions from this node as "visited" to force backtracking
-            currentNode.markVisited();
-
-            // Force a path recalculation by removing current node from stack
-            if (!dfsStack.isEmpty() && dfsStack.peek() == currentNode) {
-                dfsStack.pop();
-            }
-        }
-    }
-
-    void exploreDFS() {
-        if (!autoExplore || tank == null) {
-            return; // Nothing to explore
-        }
-
-        System.out.println("DFS exploration active with stack size: " + dfsStack.size());
-
-        // Handle border collision recovery
-        if (borderCollisionOccurred) {
-            borderCollisionOccurred = false;
-
-            // Try to find a new path after collision
-            if (!dfsStack.isEmpty()) {
-                // Get the next node to move to (backtracking)
-                Node nextNode = dfsStack.peek();
-                PVector nextPos = nextNode.position;
-
-                // Calculate direction based on the backtracking node
-                float dx = nextPos.x - tank.position.x;
-                float dy = nextPos.y - tank.position.y;
-
-                // Set direction based on the largest component
-                if (Math.abs(dx) > Math.abs(dy)) {
-                    tank.state = dx > 0 ? 1 : 2; // Right or Left
-                } else {
-                    tank.state = dy > 0 ? 3 : 4; // Down or Up
-                }
-
-                System.out.println("Recovered from border collision, moving to: " + nextPos.x + ", " + nextPos.y);
-                return;
-            }
-        }
-
-        // Regular DFS exploration logic
-        float distToCurrentNode = PVector.dist(tank.position, currentNode.position);
-        System.out.println("Distance to current node: " + distToCurrentNode);
-
-        if (distToCurrentNode < stepSize/4) {
-            // Tank has reached the current node, find the next position to explore
-            PVector nextPos = getNextDFSPosition();
-
-            if (nextPos != null) {
-                // Calculate direction vector from current position to next position
-                float dx = nextPos.x - tank.position.x;
-                float dy = nextPos.y - tank.position.y;
-
-                System.out.println("Direction vector: dx=" + dx + ", dy=" + dy);
-
-                // Determine predominant direction and set tank state accordingly
-                if (Math.abs(dx) > Math.abs(dy)) {
-                    // Horizontal movement predominant
-                    if (dx > 1) {
-                        tank.state = 1; // Move right
-                        System.out.println("Auto-moving RIGHT");
-                    } else if (dx < -1) {
-                        tank.state = 2; // Move left
-                        System.out.println("Auto-moving LEFT");
-                    } else {
-                        tank.state = 0; // Stop if we're very close
-                    }
-                } else {
-                    // Vertical movement predominant
-                    if (dy > 1) {
-                        tank.state = 3; // Move down
-                        System.out.println("Auto-moving DOWN");
-                    } else if (dy < -1) {
-                        tank.state = 4; // Move up
-                        System.out.println("Auto-moving UP");
-                    } else {
-                        tank.state = 0; // Stop if we're very close
-                    }
-                }
-            } else {
-                // No valid next position, stop the tank
-                tank.state = 0;
-                System.out.println("No valid next position, stopping tank");
-                // Optionally disable auto-explore if exploration is complete
-                if (dfsStack.isEmpty()) {
-                    autoExplore = false;
-                    System.out.println("Exploration complete, auto-explore disabled");
-                }
-            }
-        }
-    }
-
-    PVector getNextDFSPosition() {
-        if (dfsStack.isEmpty()) {
-            System.out.println("DFS stack empty");
-            return null;
-        }
-
-        if (currentNode == null) {
-            System.out.println("Current node is null");
-            return null;
-        }
-
-        System.out.println("Current node position: " + currentNode.position.x + ", " + currentNode.position.y);
-
-        // Mark the current node as visited since we're processing it
-        currentNode.markVisited();
-
-        // Define the four possible moves in a specific order (right, down, left, up)
-        PVector[] moves = new PVector[4];
-        moves[0] = new PVector(currentNode.position.x + stepSize, currentNode.position.y); // Right
-        moves[1] = new PVector(currentNode.position.x, currentNode.position.y + stepSize); // Down
-        moves[2] = new PVector(currentNode.position.x - stepSize, currentNode.position.y); // Left
-        moves[3] = new PVector(currentNode.position.x, currentNode.position.y - stepSize); // Up
-
-        // Check each possible move in the defined order
-        for (PVector newPos : moves) {
-            // Skip if out of bounds
-            if (newPos.x < 0 || newPos.x >= parent.width || newPos.y < 0 || newPos.y >= parent.height) {
-                continue;
-            }
-
-            // Check for obstacle collisions (trees)
-            boolean isObstacle = checkForObstacle(newPos);
-            if (isObstacle) {
-                continue;
-            }
-
-            // Check if this position has already been visited
-            boolean hasVisitedNode = false;
-            Node existingNode = null;
-
-            for (Node node : nodes) {
-                if (PVector.dist(node.position, newPos) < stepSize/2) {
-                    existingNode = node;
-                    if (node.visited) {
-                        hasVisitedNode = true;
-                    }
-                    break;
-                }
-            }
-
-            // If there's no node or the node exists but hasn't been visited
-            if (existingNode == null || !hasVisitedNode) {
-                System.out.println("Found direction to explore at: " + newPos.x + ", " + newPos.y);
-                return newPos;
-            }
-        }
-
-        // If we get here, all adjacent positions are either obstacles, out of bounds, or already visited
-        // We need to backtrack
-        System.out.println("No unexplored positions found, need to backtrack");
-
-        // Remove current node from stack to backtrack
-        if (!dfsStack.isEmpty()) {
-            dfsStack.pop(); // Remove current node
-
-            // If there are more nodes to explore
-            if (!dfsStack.isEmpty()) {
-                Node backtrackNode = dfsStack.peek();
-                System.out.println("Backtracking to: " + backtrackNode.position.x + ", " + backtrackNode.position.y);
-                return backtrackNode.position;
-            }
-        }
-
-        // If we can't backtrack further, exploration is complete
-        System.out.println("Exploration complete!");
-        return null;
     }
 
     void toggleAutoExplore() {
         autoExplore = !autoExplore;
         if (autoExplore) {
             parent.println("Auto-exploration enabled");
+            navState = NavigationState.EXPLORING;
         } else {
             parent.println("Auto-exploration disabled");
+            tank.state = 0; // Stop the tank
         }
     }
-    // Add this helper method to check for obstacles
-    boolean checkForObstacle(PVector pos) {
-        // This will check if there's a tree or other obstacle at the given position
-        // For now, a simple implementation that assumes Tank.checkForCollisions() handles this
-        // You can enhance this with actual collision detection with obstacles
 
-        // Example obstacle check (you need to implement based on your game's objects)
-        // For trees, you could do something like:
+    void exploreDFS() {
+        if (!autoExplore || tank == null) return;
 
+        switch (navState) {
+            case EXPLORING:
+                if (targetNode == null || PVector.dist(tank.position, targetNode.position) < 20) {
+                    // Find new exploration target
+                    targetNode = selectExplorationTarget();
+                    if (targetNode != null) {
+                        navState = NavigationState.MOVING_TO_TARGET;
+                    } else {
+                        // No good targets, try RRT expansion
+                        expandRRT();
+                    }
+                }
+                break;
+
+            case MOVING_TO_TARGET:
+                // Move toward target node
+                moveTowardTarget();
+                break;
+
+            case BACKTRACKING:
+                // We're stuck, backtrack to known territory
+                if (currentNode != null && targetNode != null) {
+                    moveTowardTarget();
+                } else {
+                    navState = NavigationState.EXPLORING;
+                }
+                break;
+        }
+    }
+
+    void moveTowardTarget() {
+        if (targetNode == null) return;
+
+        // Calculate direction to target
+        PVector direction = PVector.sub(targetNode.position, tank.position);
+        direction.normalize();
+
+        // Determine the tank's state based on direction
+        float dx = direction.x;
+        float dy = direction.y;
+
+        // Check for diagonal movement
+        if (Math.abs(dx) > 0.3f && Math.abs(dy) > 0.3f) {
+            // Diagonal movement
+            if (dx > 0 && dy > 0) {
+                tank.state = 5; // Right + Down
+            } else if (dx > 0 && dy < 0) {
+                tank.state = 6; // Right + Up
+            } else if (dx < 0 && dy > 0) {
+                tank.state = 7; // Left + Down
+            } else {
+                tank.state = 8; // Left + Up
+            }
+        } else {
+            // Cardinal movement
+            if (Math.abs(dx) > Math.abs(dy)) {
+                tank.state = dx > 0 ? 1 : 2; // Right or Left
+            } else {
+                tank.state = dy > 0 ? 3 : 4; // Down or Up
+            }
+        }
+
+        // Store the direction for "stuck" detection
+        previousDirection = direction.copy();
+
+        // Check if we've reached the target
+        if (PVector.dist(tank.position, targetNode.position) < 50) {
+            targetNode.markVisited();
+            navState = NavigationState.EXPLORING;
+            targetNode = null;
+        }
+    }
+
+    Node selectExplorationTarget() {
+        // First, try to find an unvisited node nearby
+        ArrayList<Node> candidates = new ArrayList<Node>();
+
+        for (Node node : nodes) {
+            if (!node.visited &&
+                    PVector.dist(node.position, tank.position) < maxNodeDistance * 3 &&
+                    canSee(tank.position, node.position) &&
+                    !isInHomeBase(node.position)) {  // Add this check
+                candidates.add(node);
+            }
+        }
+
+        // If we have candidates, pick the closest one
+        if (!candidates.isEmpty()) {
+            Node closest = null;
+            float minDist = Float.MAX_VALUE;
+
+            for (Node node : candidates) {
+                float dist = PVector.dist(node.position, tank.position);
+                if (dist < minDist) {
+                    minDist = dist;
+                    closest = node;
+                }
+            }
+
+            return closest;
+        }
+
+        // If no unvisited nodes nearby, try generating a new target in unexplored space
+        return null;
+    }
+
+    void expandRRT() {
+        // Try several times to find a valid position
+        for (int attempts = 0; attempts < 10; attempts++) {
+            // Generate a random point in the map
+            PVector randomPoint = new PVector(
+                    random.nextFloat() * parent.width,
+                    random.nextFloat() * parent.height
+            );
+
+            // Skip if in home base
+            if (isInHomeBase(randomPoint)) {
+                continue;
+            }
+
+            // Find the closest existing node to this random point
+            Node nearest = findClosestNode(randomPoint);
+            if (nearest == null) continue;
+
+            // Create a new point in the direction of the random point
+            PVector direction = PVector.sub(randomPoint, nearest.position);
+            direction.normalize();
+            direction.mult(maxNodeDistance);
+
+            PVector newPos = PVector.add(nearest.position, direction);
+
+            // Ensure new point is within bounds
+            newPos.x = PApplet.constrain(newPos.x, 20, parent.width - 20);
+            newPos.y = PApplet.constrain(newPos.y, 20, parent.height - 20);
+
+            // Check if the new position is valid
+            if (isValidNodePosition(newPos)) {
+                Node newNode = addNode(newPos.x, newPos.y);
+                targetNode = newNode;
+                navState = NavigationState.MOVING_TO_TARGET;
+                return;
+            }
+        }
+    }
+
+    boolean isValidNodePosition(PVector pos) {
+        // Check if in home base - skip these areas
+        if (isInHomeBase(pos)) {
+            return false;
+        }
+
+        // Check distance from existing nodes
+        for (Node node : nodes) {
+            if (PVector.dist(node.position, pos) < minNodeDistance) {
+                return false;
+            }
+        }
+
+        // Check for obstacle collision
         if (parent instanceof tanks_bas_v1_0) {
             tanks_bas_v1_0 game = (tanks_bas_v1_0) parent;
             if (game.allTrees != null) {
                 for (Tree tree : game.allTrees) {
                     if (tree != null) {
                         float dist = PVector.dist(pos, tree.position);
-                        if (dist < tree.radius + stepSize/2) {
-                            return true; // There's an obstacle
+                        if (dist < tree.radius + 30) {
+                            return false;
                         }
                     }
                 }
             }
+        }
+
+        return true;
+    }
+
+    boolean isInHomeBase(PVector position) {
+        // Check if position is in Team 0 base (red)
+        if (position.x <= 150 && position.y <= 350) {
+            return true;
+        }
+
+        // Check if position is in Team 1 base (blue)
+        if (position.x >= parent.width - 151 && position.y >= parent.height - 351) {
+            return true;
         }
 
         return false;
@@ -423,21 +469,126 @@ class ExplorationManager {
             fogLayer.fill(fogColor, 0); // Fully transparent
             fogLayer.ellipse(pos.x, pos.y, diameter, diameter);
         }
+        clearedPixels = 0;
+
+        for (int i = 0; i < totalPixels; i++) {
+            int c = fogLayer.pixels[i];
+            float alpha = parent.alpha(c);
+            if (alpha == 0) {  // threshold for "cleared"
+                clearedPixels++;
+            }
+        }
 
         // Return to normal blend mode
         fogLayer.blendMode(PApplet.BLEND);
         fogLayer.endDraw();
+        exploredPercent = (clearedPixels / (float) totalPixels) * 100;
     }
 
     void display() {
         // Display all nodes and connections
         for (Node node : nodes) {
-            node.display();
+            // Display based on visit status
+            if (node == currentNode) {
+                parent.fill(0, 200, 0); // Current node in green
+            } else if (node == targetNode) {
+                parent.fill(200, 200, 0); // Target node in yellow
+            } else if (node.visited) {
+                parent.fill(150, 150, 200, 150); // Visited nodes in blue, semi-transparent
+            } else {
+                parent.fill(200, 150, 150, 150); // Unvisited nodes in red, semi-transparent
+            }
+
+            parent.noStroke();
+            parent.ellipse(node.position.x, node.position.y, 15, 15);
         }
+
+        // Display connections between nodes
+        parent.stroke(100, 100, 200, 100);
+        parent.strokeWeight(1);
+        for (Edge edge : edges) {
+            parent.line(
+                    edge.source.position.x, edge.source.position.y,
+                    edge.destination.position.x, edge.destination.position.y
+            );
+        }
+
+        // Reset stroke
+        parent.strokeWeight(1);
 
         // Display fog layer
         if (initialized) {
             parent.image(fogLayer, 0, 0);
+        }
+        parent.fill(0);
+        parent.text(parent.nf(exploredPercent, 1, 2) + "% explored", 20, 20);
+    }
+
+    void handleBorderCollision() {
+        parent.println("Border collision detected - adjusting navigation");
+
+        // If we were moving to a target, it might be unreachable
+        if (navState == NavigationState.MOVING_TO_TARGET) {
+            // Mark current target as potentially unreachable or problematic
+            if (targetNode != null) {
+                // Increment a counter or mark in some way - we'll use a direct field for simplicity
+                stuckCounter++;
+
+                // If we've hit too many borders while trying to reach this target, pick a new one
+                if (stuckCounter > 3) {
+                    parent.println("Giving up on current target after multiple collisions");
+                    navState = NavigationState.EXPLORING;
+                    targetNode = null;
+                    stuckCounter = 0;
+                } else {
+                    // Try to find a different path or approach
+                    // Generate a random direction to escape the border
+                    float randomAngle = random.nextFloat() * PApplet.TWO_PI;
+                    PVector escapeDirection = new PVector(PApplet.cos(randomAngle), PApplet.sin(randomAngle));
+
+                    // Set tank state based on escape direction (away from border)
+                    if (Math.abs(escapeDirection.x) > Math.abs(escapeDirection.y)) {
+                        tank.state = escapeDirection.x > 0 ? 1 : 2; // Right or Left
+                    } else {
+                        tank.state = escapeDirection.y > 0 ? 3 : 4; // Down or Up
+                    }
+                }
+            }
+        } else {
+            // If we're just exploring, change direction to move away from border
+            // Determine which border was hit by looking at tank position
+            PVector center = new PVector(parent.width/2, parent.height/2);
+            PVector directionToCenter = PVector.sub(center, tank.position);
+            directionToCenter.normalize();
+
+            // Set tank state to move toward center of map
+            if (Math.abs(directionToCenter.x) > Math.abs(directionToCenter.y)) {
+                tank.state = directionToCenter.x > 0 ? 1 : 2; // Right or Left
+            } else {
+                tank.state = directionToCenter.y > 0 ? 3 : 4; // Down or Up
+            }
+        }
+
+        // Add the current position to nodes if it doesn't exist
+        // This helps build a map of the boundary
+        float padding = 30; // Stay a bit away from the actual border
+        float boundaryX = PApplet.constrain(tank.position.x, padding, parent.width - padding);
+        float boundaryY = PApplet.constrain(tank.position.y, padding, parent.height - padding);
+
+        Node boundaryNode = new Node(parent, boundaryX, boundaryY);
+
+        // Only add if not too close to existing nodes
+        boolean tooClose = false;
+        for (Node node : nodes) {
+            if (PVector.dist(node.position, boundaryNode.position) < minNodeDistance) {
+                tooClose = true;
+                break;
+            }
+        }
+
+        if (!tooClose) {
+            nodes.add(boundaryNode);
+            connectToVisibleNodes(boundaryNode);
         }
     }
 }

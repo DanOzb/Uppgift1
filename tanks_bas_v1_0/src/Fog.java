@@ -1,6 +1,6 @@
 import processing.core.*;
 import java.util.ArrayList;
-
+/*
 class Fog {
     private PApplet parent;
     PGraphics fogLayer;
@@ -85,3 +85,5 @@ class Fog {
         parent.image(fogLayer, 0, 0);
     }
 }
+
+ */

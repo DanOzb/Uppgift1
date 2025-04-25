@@ -2,7 +2,7 @@ import processing.core.PApplet;
 import processing.core.PVector;
 
 import java.util.ArrayList;
-
+/*
 public class Explorer {
     private PApplet parent;
     PVector position;
@@ -181,3 +181,5 @@ public class Explorer {
         }
     }
 }
+
+ */
