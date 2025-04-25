@@ -10,7 +10,7 @@ class Tank {
     PVector startpos;
     String name;
 
-    String navState = "";
+    String navState = "Idle";
     PImage img;
     int col; // Change from 'color', works still
     float diameter;
@@ -425,10 +425,10 @@ class Tank {
 
         parent.strokeWeight(1);
         parent.fill(230);
-        parent.rect(0 + 25, 0 - 25, 100, 40);  // Displaying info above the tank
+        parent.rect(0 + 25, 0 - 25, 100, 60);  // Displaying info above the tank
         parent.fill(30);
         parent.textSize(15);
-        parent.text(this.name + "\n( " + (int)this.position.x + ", " + (int)this.position.y + " )", 25 + 5, -5 - 5);
+        parent.text(navState + "\n" + this.name + "\n( " + (int)this.position.x + ", " + (int)this.position.y + " )", 25 + 5, -5 - 5);
 
         parent.popMatrix();  // Revert transformations
     }

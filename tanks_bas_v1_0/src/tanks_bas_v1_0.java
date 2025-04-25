@@ -116,7 +116,7 @@ public class tanks_bas_v1_0 extends PApplet{
       }else{
         // Update exploration
         explorationManager.updateTankPosition();
-        explorationManager.exploreDFS();
+        explorationManager.navigation();
       }
 
 

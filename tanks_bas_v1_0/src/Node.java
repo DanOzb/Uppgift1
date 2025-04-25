@@ -14,6 +14,10 @@ class Node {
     float explorationValue;
     float lastVisitTime;
 
+    //A*
+    float fScore;
+    float gScore;
+
     Node(PApplet parent, float x, float y){
         this.parent = parent;
         position = new PVector(x, y);
@@ -22,6 +26,9 @@ class Node {
         visitCount = 0;
         explorationValue = 100.0f; // Start with high exploration value
         lastVisitTime = parent.millis();
+
+        fScore = Float.MAX_VALUE;
+        gScore = Float.MAX_VALUE;
     }
 
     void addEdge(Node destination, float weight){
