@@ -21,8 +21,6 @@ class ExplorationManager {
     ArrayList<PVector> path;
     Random random;
 
-    int currentIndex = 0;
-
     // Shared properties
     Tank tank;
     boolean autoExplore;
@@ -149,6 +147,13 @@ class ExplorationManager {
         parent.println("Tank appears stuck - changing direction");
 
 
+        if (navState == NavigationState.RETURNING_HOME) {
+            targetNode = baseNode;
+
+            moveTowardTarget();
+
+            return;
+        }
         // Generate a random direction to attempt to escape
         float randomAngle = random.nextFloat() * PApplet.TWO_PI;
         PVector escapeDirection = new PVector(PApplet.cos(randomAngle), PApplet.sin(randomAngle));
@@ -268,36 +273,14 @@ class ExplorationManager {
         switch (navState) {
             case RETURNING_HOME:
                 tank.navState = "ReturningHome";
-
-                if (path == null || path.isEmpty()) {
-                    ArrayList<Node> pathing = aStar(currentNode,baseNode);
-
-                    if (!pathing.isEmpty()) {
-                        path = new ArrayList<>();
-                        for (Node node : pathing) {
-                            path.add(node.position.copy());
-                        }
-                        currentIndex = 0;
-                    }
+                if (targetNode == baseNode) {
+                    moveTowardTarget();
                 }
 
-                if (path != null && !path.isEmpty() && currentIndex < path.size()) {
-                    PVector target = path.get(currentIndex);
-
-                    if (PVector.dist(tank.position, target) < 20) {
-                        currentIndex++;
-                    } else {
-                        Node closestNode = findClosestNode(target);
-                        if (closestNode != null) {
-                            targetNode = closestNode;
-                            moveTowardTarget();
-                        }
-                    }
-                } else if (PVector.dist(tank.position, baseNode.position) < 50) {
-                    navState = NavigationState.EXPLORING;
+                if (PVector.dist(tank.position, baseNode.position) < 50) {
+                    System.out.println("should be home here");
                 } else {
                     targetNode = baseNode;
-                    moveTowardTarget();
                 }
                 break;
             case EXPLORING:
@@ -568,14 +551,13 @@ class ExplorationManager {
 
 
         if (navState == NavigationState.RETURNING_HOME) {
-            float randomAngle = random.nextFloat() * PApplet.TWO_PI;
-            PVector direction = new PVector(PApplet.cos(randomAngle), PApplet.sin(randomAngle));
+            // Keep the target as the base node
+            targetNode = baseNode;
 
-            if (Math.abs(direction.x) > Math.abs(direction.y)) {
-                tank.state = direction.x > 0 ? 1 : 2;
-            } else {
-                tank.state = direction.y > 0 ? 3 : 4;
-            }
+            // Just recalculate direction to base and persist
+            moveTowardTarget();
+            parent.println("Still returning home despite collision");
+
             return;
         }
         // If we were moving to a target, it might be unreachable
@@ -655,61 +637,10 @@ class ExplorationManager {
         }
     }
 
-    ArrayList<Node> aStar(Node start, Node goal) {
-        PriorityQueue<Node> openSet = new PriorityQueue<>((a, b) ->
-        Float.compare(a.fScore, b.fScore));
-
-        HashMap<Node, Float> gScore = new HashMap<>();
-        HashMap<Node, Float> fScore = new HashMap<>();
-        HashMap<Node,Node> traveledFrom = new HashMap<>();
-
-        for (Node node : nodes) {
-            gScore.put(node, Float.MAX_VALUE);
-            fScore.put(node, Float.MAX_VALUE);
-        }
-
-        gScore.put(start, 0f);
-        fScore.put(start, heuristicCost(start,goal));
-        openSet.add(start);
-
-        while (!openSet.isEmpty()) {
-            Node current = openSet.poll();
-
-            if (current.equals(goal)) {
-                return reconstructPAth(traveledFrom,current);
-            }
-
-            for (Edge edge : current.edges) {
-                if (!edge.traversable) continue;
-
-                Node neighbor = edge.destination;
-                float currentScore = gScore.get(current) + edge.weight;
-
-                if (currentScore < gScore.get(neighbor)) {
-                    traveledFrom.put(neighbor, current);
-                    gScore.put(neighbor, currentScore);
-                    fScore.put(neighbor, gScore.get(neighbor) + heuristicCost(neighbor,goal));
-
-                    openSet.remove(neighbor);
-                    openSet.add(neighbor);
-                }
-            }
-        }
-        return new ArrayList<>();
+    public NavigationState getNavigationState() {
+        return navState;
     }
-    private ArrayList<Node> reconstructPAth(HashMap<Node,Node> traveledFrom, Node current) {
-        ArrayList<Node> path = new ArrayList<>();
-
-        path.add(current);
-
-        while (traveledFrom.containsKey(current)) {
-            current = traveledFrom.get(current);
-            path.add(0, current);
-        }
-        return path;
-    }
-
-    private Float heuristicCost(Node a, Node b) {
-        return PVector.dist(a.position, b.position);
+    public boolean isReturningHome() {
+        return navState == NavigationState.RETURNING_HOME;
     }
 }

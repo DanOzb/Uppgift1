@@ -191,11 +191,13 @@ public class tanks_bas_v1_0 extends PApplet{
         }
       }
 
-      // Check for collisions with trees
-      if(allTanks[i].checkForCollisions(allTrees))
-        System.out.println("Same position 60");
-        explorationManager.samePositionCounter = 60; //TODO: ugly
-
+      boolean treeCollision = allTanks[i].checkForCollisions(allTrees);
+      if (treeCollision) {
+        if (i == 0 && explorationManager != null && !explorationManager.isReturningHome()) {
+          System.out.println("Same position 60");
+          explorationManager.samePositionCounter = 60; //TODO: ugly
+        }
+      }
       // Check for map border collisions
       allTanks[i].checkForCollisions(new PVector(width, height));
     }

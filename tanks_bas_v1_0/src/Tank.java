@@ -65,9 +65,12 @@ class Tank {
                 // If auto-explore is active, let the exploration manager know
                 if (parent instanceof tanks_bas_v1_0) {
                     tanks_bas_v1_0 game = (tanks_bas_v1_0) parent;
-                    if (game.explorationManager != null &&
-                            game.explorationManager.isAutoExploreActive()) {
-                        game.explorationManager.handleBorderCollision();
+                    if (game.explorationManager != null && game.explorationManager.isAutoExploreActive()) {
+                        if (!game.explorationManager.isReturningHome()) {
+                            game.explorationManager.handleBorderCollision();
+                        } else {
+                            velocity.mult(0.5f);
+                        }
                     }
                 }
             }
@@ -75,7 +78,7 @@ class Tank {
 
         // If a collision was detected, temporarily stop the tank's movement
         if (collisionDetected) {
-            velocity.mult(0.1f);  // Significant velocity reduction but not complete stop
+            velocity.mult(0.5f);  // Significant velocity reduction but not complete stop
         }
         return collisionDetected;
     }
@@ -497,8 +500,11 @@ class Tank {
         if (collision && parent instanceof tanks_bas_v1_0) {
             tanks_bas_v1_0 game = (tanks_bas_v1_0) parent;
             if (game.explorationManager != null) {
-                // Notify exploration manager of the collision
-                game.explorationManager.handleBorderCollision();
+                if (!game.explorationManager.isReturningHome()) {
+                    game.explorationManager.handleBorderCollision();
+                } else {
+                    System.out.println("explorationmanager hit border but still returning home");
+                }
             }
         }
     }
