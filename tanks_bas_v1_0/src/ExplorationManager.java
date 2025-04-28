@@ -450,7 +450,7 @@ class ExplorationManager {
                 for (Tree tree : game.allTrees) {
                     if (tree != null) {
                         float dist = PVector.dist(pos, tree.position);
-                        if (dist < tree.radius + 30) {
+                        if (dist < tree.radius + 60) {
                             return false;
                         }
                     }
@@ -551,8 +551,17 @@ class ExplorationManager {
 
 
         if (navState == NavigationState.RETURNING_HOME) {
-            // Keep the target as the base node
-            targetNode = baseNode;
+
+            targetNode = findClosestNode(tank.position);
+            moveTowardTarget();
+
+            while(true){
+                if(tank.position == targetNode.position){
+                    // Keep the target as the base node
+                    targetNode = baseNode;
+                    break;
+                }
+            }
 
             // Just recalculate direction to base and persist
             moveTowardTarget();
@@ -608,18 +617,8 @@ class ExplorationManager {
         float boundaryX = PApplet.constrain(tank.position.x, padding, parent.width - padding);
         float boundaryY = PApplet.constrain(tank.position.y, padding, parent.height - padding);
 
-        Node boundaryNode = new Node(parent, boundaryX, boundaryY);
-
-        // Only add if not too close to existing nodes
-        boolean tooClose = false;
-        for (Node node : nodes) {
-            if (PVector.dist(node.position, boundaryNode.position) < minNodeDistance) {
-                tooClose = true;
-                break;
-            }
-        }
-
-        if (!tooClose) {
+        if (isValidNodePosition(tank.position)) {
+            Node boundaryNode = new Node(parent, boundaryX, boundaryY);
             nodes.add(boundaryNode);
             connectToVisibleNodes(boundaryNode);
         }
