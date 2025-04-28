@@ -273,14 +273,28 @@ class ExplorationManager {
         switch (navState) {
             case RETURNING_HOME:
                 tank.navState = "ReturningHome";
-                if (targetNode == baseNode) {
+                if (targetNode != null && PVector.dist(tank.position, targetNode.position) < 20) {
+                    if (!path.isEmpty() && PVector.dist(path.get(0), targetNode.position) < 20) {
+                        path.remove(0);
+                    }
+                    if (!path.isEmpty()) {
+                        PVector nextPos = path.get(0);
+                        Node nextNode = findClosestNode(nextPos);
+                        if (nextNode != null) {
+                            targetNode = nextNode;
+                        }
+                    } else {
+                        targetNode = baseNode;
+                    }
+                }
+
+                if (targetNode != null) {
                     moveTowardTarget();
                 }
 
                 if (PVector.dist(tank.position, baseNode.position) < 50) {
                     System.out.println("should be home here");
-                } else {
-                    targetNode = baseNode;
+                    navState = NavigationState.EXPLORING;
                 }
                 break;
             case EXPLORING:
@@ -406,8 +420,12 @@ class ExplorationManager {
             }
 
             // Find the closest existing node to this random point
-            Node nearest = findClosestNode(randomPoint);
-            if (nearest == null) continue;
+            //Node nearest = findClosestNode(randomPoint);
+            //if (nearest == null) continue;
+
+            //find node closest to tank
+            Node nearest = findClosestNode(tank.position);
+            if(nearest == null) continue;
 
             // Create a new point in the direction of the random point
             PVector direction = PVector.sub(randomPoint, nearest.position);
@@ -448,6 +466,9 @@ class ExplorationManager {
             tanks_bas_v1_0 game = (tanks_bas_v1_0) parent;
             if (game.allTrees != null) {
                 for (Tree tree : game.allTrees) {
+                    if(lineIntersectsTree(tank.position, pos, tree.position, tree.radius)){
+                        return false;
+                    }
                     if (tree != null) {
                         float dist = PVector.dist(pos, tree.position);
                         if (dist < tree.radius + 60) {
@@ -460,14 +481,42 @@ class ExplorationManager {
         return true;
     }
 
+    boolean lineIntersectsTree(PVector start, PVector end, PVector center, float radius) {
+        // Vector from start to end
+        PVector d = PVector.sub(end, start);
+        // Vector from start to circle center
+        PVector f = PVector.sub(start, center);
+
+        float a = d.dot(d);
+        float b = 2 * f.dot(d);
+        float c = f.dot(f) - radius * radius;
+
+        float discriminant = b * b - 4 * a * c;
+
+        if (discriminant < 0) {
+            return false; // No intersection
+        } else {
+            discriminant = (float) Math.sqrt(discriminant);
+
+            // Calculate the two intersection points
+            float t1 = (-b - discriminant) / (2 * a);
+            float t2 = (-b + discriminant) / (2 * a);
+
+            // Check if at least one intersection point is within the line segment
+            return (t1 >= 0 && t1 <= 1) || (t2 >= 0 && t2 <= 1);
+        }
+    }
+
     boolean isInHomeBase(PVector position) { //TODO: kommer behöva ändra här
         // Check if position is in Team 0 base (red)
-        if (position.x <= 150 && position.y <= 350) {
+        if (position.x >= 0 && position.x <= 150 &&
+                position.y >= 0 && position.y <= 350) {
             return true;
         }
 
         // Check if position is in Team 1 base (blue)
-        if (position.x >= parent.width - 151 && position.y >= parent.height - 351) {
+        if (position.x >= parent.width - 151 && position.x <= parent.width &&
+                position.y >= parent.height - 351 && position.y <= parent.height) {
             return true;
         }
 
@@ -549,26 +598,6 @@ class ExplorationManager {
     void handleBorderCollision() {
         parent.println("Border collision detected - adjusting navigation");
 
-
-        if (navState == NavigationState.RETURNING_HOME) {
-
-            targetNode = findClosestNode(tank.position);
-            moveTowardTarget();
-
-            while(true){
-                if(tank.position == targetNode.position){
-                    // Keep the target as the base node
-                    targetNode = baseNode;
-                    break;
-                }
-            }
-
-            // Just recalculate direction to base and persist
-            moveTowardTarget();
-            parent.println("Still returning home despite collision");
-
-            return;
-        }
         // If we were moving to a target, it might be unreachable
         if (navState == NavigationState.MOVING_TO_TARGET) {
             // Mark current target as potentially unreachable or problematic
@@ -628,13 +657,111 @@ class ExplorationManager {
         this.targetNode = targetNode;
 
         if (targetNode == baseNode) {
-            navState = NavigationState.RETURNING_HOME;
-            System.out.println("Returning home");
+            returnHome();
         } else {
             System.out.println("failed to move to " + targetNode);
             navState = NavigationState.MOVING_TO_TARGET;
         }
     }
+    
+    void returnHome() {
+        navState = NavigationState.RETURNING_HOME;
+
+        Node closestNode = findClosestNode(tank.position);
+
+        if (closestNode == null || PVector.dist(closestNode.position, tank.position) > minNodeDistance) {
+            closestNode = addNode(tank.position.x, tank.position.y);
+
+
+        currentNode = closestNode;
+
+        ArrayList<Node> pathingHome = aStar(closestNode,baseNode);
+
+        if (!pathingHome.isEmpty()) {
+            path.clear();
+        }
+
+        for (Node node : pathingHome) {
+            path.add(node.position.copy());
+        }
+
+        if (pathingHome.size() > 1) {
+            targetNode = pathingHome.get(1);
+        } else {
+            targetNode = baseNode;
+        }
+        }
+    }
+
+
+
+    ArrayList<Node> aStar(Node start, Node goal) {
+
+        Set<Node> visitedNodes = new HashSet<>();
+
+        PriorityQueue<Node> openSet = new PriorityQueue<>((a, b) ->
+                Float.compare(a.fScore, b.fScore));
+
+        for (Node node : nodes) {
+            node.gScore = Float.MAX_VALUE;
+            node.fScore = Float.MAX_VALUE;
+        }
+
+        start.gScore = 0f;
+        start.fScore = heuristicCost(start, goal);
+
+        HashMap<Node,Node> traveledFrom = new HashMap<>();
+
+        openSet.add(start);
+
+        while (!openSet.isEmpty()) {
+            Node current = openSet.poll();
+
+            if (current.equals(goal)) {
+                return reconstructPAth(traveledFrom,current);
+            }
+
+            visitedNodes.add(current);
+
+            for (Edge edge : current.edges) {
+                if (!edge.traversable) continue;
+
+                Node neighbor = edge.destination;
+                if (visitedNodes.contains(neighbor)) continue;
+
+                float currentGScore = current.gScore + edge.weight;
+
+                if (currentGScore < neighbor.gScore) {
+                    traveledFrom.put(neighbor, current);
+
+                    neighbor.gScore = current.gScore;
+                    neighbor.fScore = neighbor.gScore + heuristicCost(neighbor, goal);
+
+                    if (!openSet.contains(neighbor)) {
+                        openSet.add(neighbor);
+                    }
+                }
+            }
+        }
+        return new ArrayList<>();
+    }
+
+    private ArrayList<Node> reconstructPAth(HashMap<Node,Node> traveledFrom, Node current) {
+        ArrayList<Node> path = new ArrayList<>();
+
+        path.add(current);
+
+        while (traveledFrom.containsKey(current)) {
+            current = traveledFrom.get(current);
+            path.add(0, current);
+        }
+        return path;
+    }
+
+    private Float heuristicCost(Node a, Node b) {
+        return PVector.dist(a.position, b.position);
+    }
+
 
     public NavigationState getNavigationState() {
         return navState;
@@ -642,4 +769,10 @@ class ExplorationManager {
     public boolean isReturningHome() {
         return navState == NavigationState.RETURNING_HOME;
     }
+
+    void testReturnHome() {
+        returnHome();
+
+    }
+
 }

@@ -22,8 +22,6 @@ class Tank {
     boolean isInTransition;
     boolean collisionDetected;
 
-    Environment environment;
-
     // Constructor
     Tank(PApplet parent, String _name, PVector _startpos, float _size, int _col ) {
         this.parent = parent;
@@ -39,14 +37,12 @@ class Tank {
 
         this.state        = 0; // 0(still), 1(moving)
         this.speed        = 1;
-        this.maxspeed     = 5;  // Reduced maxspeed to make DFS more visible
+        this.maxspeed     = 2;  // Reduced maxspeed to make DFS more visible
         this.isInTransition = false;
         this.collisionDetected = false;
 
         this.fieldOfView = 100.0f;
 
-        environment = new Environment(parent);
-        environment.setPosition(environment.createNode(this.position.x, this.position.y));
     }
 
     //======================================

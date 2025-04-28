@@ -291,6 +291,10 @@ public class tanks_bas_v1_0 extends PApplet{
       // Toggle auto-exploration mode
       explorationManager.toggleAutoExplore();
     }
+    if (key == 'r' || key == 'R') {
+      explorationManager.testReturnHome();
+    }
+
   }
 
   // Mousebuttons
