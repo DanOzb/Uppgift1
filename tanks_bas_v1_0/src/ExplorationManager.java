@@ -62,7 +62,7 @@ class ExplorationManager {
         this.path = new ArrayList<PVector>();
         this.random = new Random();
         this.autoExplore = false;
-        this.minNodeDistance = 50;
+        this.minNodeDistance = 75;
         this.maxNodeDistance = 150;
         this.previousDirection = new PVector(0, 0);
         this.stuckCounter = 0;
@@ -145,16 +145,8 @@ class ExplorationManager {
 
     void handleStuckTank() {
         parent.println("Tank appears stuck - changing direction");
-
-
-        if (navState == NavigationState.RETURNING_HOME) {
-            targetNode = baseNode;
-
-            moveTowardTarget();
-
-            return;
-        }
         // Generate a random direction to attempt to escape
+
         float randomAngle = random.nextFloat() * PApplet.TWO_PI;
         PVector escapeDirection = new PVector(PApplet.cos(randomAngle), PApplet.sin(randomAngle));
 
@@ -283,8 +275,6 @@ class ExplorationManager {
                         if (nextNode != null) {
                             targetNode = nextNode;
                         }
-                    } else {
-                        targetNode = baseNode;
                     }
                 }
 
@@ -365,7 +355,7 @@ class ExplorationManager {
         previousDirection = direction.copy();
 
         // Check if we've reached the target
-        if (PVector.dist(tank.position, targetNode.position) < 50) {
+        if (PVector.dist(tank.position, targetNode.position) < 50 && navState != NavigationState.RETURNING_HOME) {
             targetNode.markVisited();
             navState = NavigationState.EXPLORING;
             targetNode = null;
@@ -671,11 +661,10 @@ class ExplorationManager {
 
         if (closestNode == null || PVector.dist(closestNode.position, tank.position) > minNodeDistance) {
             closestNode = addNode(tank.position.x, tank.position.y);
-
-
+        }
         currentNode = closestNode;
 
-        ArrayList<Node> pathingHome = aStar(closestNode,baseNode);
+        ArrayList<Node> pathingHome = aStar(closestNode, baseNode);
 
         if (!pathingHome.isEmpty()) {
             path.clear();
@@ -686,14 +675,11 @@ class ExplorationManager {
         }
 
         if (pathingHome.size() > 1) {
-            targetNode = pathingHome.get(1);
+            targetNode = pathingHome.get(0); //TODO: bandaid kanske ändra case till 1?
         } else {
             targetNode = baseNode;
         }
-        }
     }
-
-
 
     ArrayList<Node> aStar(Node start, Node goal) {
 
@@ -772,7 +758,6 @@ class ExplorationManager {
 
     void testReturnHome() {
         returnHome();
-
     }
 
 }

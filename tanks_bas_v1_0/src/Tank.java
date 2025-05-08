@@ -266,7 +266,8 @@ class Tank {
 
                 // If exploration manager exists, tell it to return home
                 if (game.explorationManager != null) {
-                    game.explorationManager.moveTo(game.explorationManager.baseNode);
+                    System.out.println("Collided");
+                    game.explorationManager.returnHome();
                 }
             }
             parent.println(name + " detected enemy base - returning home");
