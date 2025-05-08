@@ -56,7 +56,6 @@ class ExplorationManager {
         this.initialized = false;
         this.visitedPositions = new ArrayList<PVector>();
 
-        // Explorer initialization
         this.nodes = new ArrayList<Node>();
         this.edges = new ArrayList<Edge>();
         this.path = new ArrayList<PVector>();
