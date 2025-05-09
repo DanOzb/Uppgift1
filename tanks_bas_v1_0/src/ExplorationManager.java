@@ -85,7 +85,7 @@ class ExplorationManager {
         }
     }
 
-    void initialize() {
+    void initializeFog() {
         if (parent.width > 0 && parent.height > 0) {
             fogLayer = parent.createGraphics(parent.width, parent.height);
             fogLayer.beginDraw();
@@ -180,7 +180,7 @@ class ExplorationManager {
         return closest;
     }
 
-    Node addNode(float x, float y) {
+    Node addNode(float x, float y) { //TODO: borde användas överallt, och aldrig direkt till nodklassen
         Node newNode = new Node(parent, x, y);
         nodes.add(newNode);
 
@@ -208,7 +208,7 @@ class ExplorationManager {
     boolean canSee(PVector from, PVector to) {
         // Check if line between points intersects with any obstacles
         if (parent instanceof tanks_bas_v1_0) {
-            tanks_bas_v1_0 game = (tanks_bas_v1_0) parent;
+            tanks_bas_v1_0 game = (tanks_bas_v1_0) parent; //TODO: allt borde vara i collisions.
             if (game.allTrees != null) {
                 for (Tree tree : game.allTrees) {
                     if (tree != null) {
@@ -265,7 +265,7 @@ class ExplorationManager {
             case RETURNING_HOME:
                 tank.navState = "ReturningHome";
                 if (targetNode != null && PVector.dist(tank.position, targetNode.position) < 20) {
-                    if (!path.isEmpty() && PVector.dist(path.get(0), targetNode.position) < 20) {
+                    if (!path.isEmpty()) {
                         path.remove(0);
                     }
                     if (!path.isEmpty()) {
@@ -636,20 +636,7 @@ class ExplorationManager {
         float boundaryY = PApplet.constrain(tank.position.y, padding, parent.height - padding);
 
         if (isValidNodePosition(tank.position)) {
-            Node boundaryNode = new Node(parent, boundaryX, boundaryY);
-            nodes.add(boundaryNode);
-            connectToVisibleNodes(boundaryNode);
-        }
-    }
-
-    void moveTo(Node targetNode) {
-        this.targetNode = targetNode;
-
-        if (targetNode == baseNode) {
-            returnHome();
-        } else {
-            System.out.println("failed to move to " + targetNode);
-            navState = NavigationState.MOVING_TO_TARGET;
+            addNode(boundaryX,boundaryY);
         }
     }
     
@@ -747,10 +734,6 @@ class ExplorationManager {
         return PVector.dist(a.position, b.position);
     }
 
-
-    public NavigationState getNavigationState() {
-        return navState;
-    }
     public boolean isReturningHome() {
         return navState == NavigationState.RETURNING_HOME;
     }
@@ -758,5 +741,4 @@ class ExplorationManager {
     void testReturnHome() {
         returnHome();
     }
-
 }

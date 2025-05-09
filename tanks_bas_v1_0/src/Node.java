@@ -53,24 +53,14 @@ class Node {
         explorationValue = 0; // Reset exploration value upon visit
     }
 
-    float getImportance() {
-        // Higher value = more important to visit
-        // Factors: exploration value, time since last visit, number of edges
-
-        float timeFactor = (parent.millis() - lastVisitTime) / 5000.0f; // Time factor grows over time
-        float edgeFactor = 5.0f / (edges.size() + 1.0f); // Fewer edges = higher value
-
-        return explorationValue + timeFactor + edgeFactor;
-    }
-
-    void display(){
+    void display(){ //TODO: kolla i exploration manager, den här kanske ska ligga här
         // This is now handled in ExplorationManager to centralize visualization
         parent.fill(visited ? parent.color(150, 200, 150) : parent.color(200, 150, 150), 150);
         parent.noStroke();
         parent.ellipse(position.x, position.y, 12, 12);
     }
 
-    boolean isNeighbor(Node other) {
+    boolean isNeighbor(Node other) { //TODO: kanske behövs återkom efter explorationmanager
         for (Edge edge : edges) {
             if (edge.destination == other) {
                 return true;

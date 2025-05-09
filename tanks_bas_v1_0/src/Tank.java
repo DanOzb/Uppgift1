@@ -47,7 +47,6 @@ class Tank {
 
     //======================================
     void checkEnvironment() {
-        //parent.println("*** Tank.checkEnvironment()");
         borders();
     }
 
@@ -152,7 +151,7 @@ class Tank {
         return false;
     }
 
-    boolean willHitEnemyBase(PVector futurePosition) {
+    boolean willHitEnemyBase(PVector futurePosition) { //TODO: flytta till collisions?
         // Team 0 tanks (red) can't enter Team 1 base (blue)
         if (col == parent.color(204, 50, 50)) { // Team 0 color
             // Check if future position would be in Team 1 base area
@@ -274,31 +273,7 @@ class Tank {
         }
     }
 
-
-
-    // Movement functions
-    void moveForward() {
-        //parent.println("*** Tank.moveForward()");
-
-        if (this.velocity.x < this.maxspeed) {
-            this.velocity.x += 0.1;
-        } else {
-            this.velocity.x = this.maxspeed;
-        }
-    }
-
-    void moveBackward() {
-        //parent.println("*** Tank.moveBackward()");
-
-        if (this.velocity.x > -this.maxspeed) {
-            this.velocity.x -= 0.1;
-        } else {
-            this.velocity.x = -this.maxspeed;
-        }
-    }
-
     void stopMoving() {
-        //parent.println("*** Tank.stopMoving()");
         this.velocity.x = 0;
         this.velocity.y = 0;
     }
@@ -372,26 +347,6 @@ class Tank {
         }
     }
 
-
-    private void moveUpwards() {
-        //parent.println("*** Tank.moveDownwards()");
-        if (this.velocity.y > -this.maxspeed) {
-            this.velocity.y -= 0.1;
-        } else {
-            this.velocity.y = -this.maxspeed;
-        }
-    }
-
-    private void moveDownwards() {
-        //parent.println("*** Tank.moveUpwards()");
-
-        if (this.velocity.y < this.maxspeed) {
-            this.velocity.y += 0.1;
-        } else {
-            this.velocity.y = this.maxspeed;
-        }
-    }
-
     // Draw the tank's visual representation
     void drawTank(float x, float y) {
         // Use fill() to set the color, which is fine here
@@ -452,18 +407,6 @@ class Tank {
             return Math.max(current - acceleration, target);
         }
         return current;
-    }
-
-    // Helper method for smooth deceleration
-    float decelerate(float current) {
-        float deceleration = 0.3f;
-        if (Math.abs(current) < deceleration) {
-            return 0;
-        } else if (current > 0) {
-            return current - deceleration;
-        } else {
-            return current + deceleration;
-        }
     }
 
     void borders() {

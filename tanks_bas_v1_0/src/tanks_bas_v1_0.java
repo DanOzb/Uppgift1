@@ -96,7 +96,7 @@ public class tanks_bas_v1_0 extends PApplet{
 
     // Create the exploration manager with a step size of 25
     explorationManager = new ExplorationManager(this, 25f);
-    explorationManager.initialize();
+    explorationManager.initializeFog();
     explorationManager.setTank(tank0);
   }
 
@@ -170,7 +170,7 @@ public class tanks_bas_v1_0 extends PApplet{
     }
   }
 
-  void checkForCollisions() {
+  void checkForCollisions() { //TODO: ska gå över till collisions,
     // Check for base collisions first
     for (int i = 0; i < allTanks.length; i++) {
       if (allTanks[i] != null) {
