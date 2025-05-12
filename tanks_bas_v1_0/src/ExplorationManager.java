@@ -2,6 +2,12 @@ import processing.core.*;
 
 import java.util.*;
 
+/**
+ * Manages the exploration behavior and fog of war for a tank.
+ * This class handles automatic exploration, path finding, node management,
+ * and fog of war visualization.
+ */
+
 class ExplorationManager {
     PApplet parent;
 
@@ -35,6 +41,9 @@ class ExplorationManager {
     int clearedPixels;
     int totalPixels;
     float exploredPercent;
+    int startPositionCounter;
+
+    boolean testDijkstra;
 
     // Navigation states
     private enum NavigationState {
@@ -46,6 +55,13 @@ class ExplorationManager {
 
     private NavigationState navState;
 
+
+    /**
+     * Creates a new ExplorationManager with the specified visibility radius.
+     *
+     * @param parent The Processing PApplet this manager belongs to
+     * @param visibilityRadius The radius around the tank that is visible/explored
+     */
     ExplorationManager(PApplet parent, float visibilityRadius) {
         this.parent = parent;
         this.visibilityRadius = visibilityRadius;
@@ -61,13 +77,22 @@ class ExplorationManager {
         this.path = new ArrayList<PVector>();
         this.random = new Random();
         this.autoExplore = false;
-        this.minNodeDistance = 75;
+        this.minNodeDistance = 50;
         this.maxNodeDistance = 150;
         this.previousDirection = new PVector(0, 0);
         this.stuckCounter = 0;
         this.samePositionCounter = 0;
         this.navState = NavigationState.EXPLORING;
+
+        this.testDijkstra = false;
     }
+
+    /**
+     * Sets the tank controlled by this exploration manager.
+     * Creates a starting node at the tank's position.
+     *
+     * @param tank The tank to be controlled by this manager
+     */
 
     void setTank(Tank tank) {
         this.tank = tank;
@@ -84,7 +109,10 @@ class ExplorationManager {
             visitedPositions.add(tank.position.copy());
         }
     }
-
+    /**
+     * Initializes the fog of war layer.
+     * Creates a graphic layer for the fog and sets it to fully opaque.
+     */
     void initializeFog() {
         if (parent.width > 0 && parent.height > 0) {
             fogLayer = parent.createGraphics(parent.width, parent.height);
@@ -97,7 +125,11 @@ class ExplorationManager {
             clearedPixels = 0;
         }
     }
-
+    /**
+     * Updates the tank's position in the exploration graph.
+     * Detects if the tank is stuck, adds visited positions for fog clearing,
+     * and creates new nodes when in unexplored territory.
+     */
     void updateTankPosition() {
         if (tank == null) return;
 
@@ -141,8 +173,11 @@ class ExplorationManager {
             addNode(tank.position.x, tank.position.y);
         }
     }
-
-    void handleStuckTank() {
+    /**
+     * Handles a tank that appears to be stuck in one position.
+     * Changes direction randomly to attempt to escape the stuck position.
+     */
+    void handleStuckTank() { //TODO: skapar den här problem?
         parent.println("Tank appears stuck - changing direction");
         // Generate a random direction to attempt to escape
 
@@ -162,7 +197,12 @@ class ExplorationManager {
             targetNode = null;
         }
     }
-
+    /**
+     * Finds the closest node to a given position.
+     *
+     * @param position Position to find the closest node to
+     * @return The closest Node, or null if no nodes exist
+     */
     Node findClosestNode(PVector position) {
         if (nodes.isEmpty()) return null;
 
@@ -179,7 +219,14 @@ class ExplorationManager {
 
         return closest;
     }
-
+    /**
+     * Adds a new node at the specified coordinates to the exploration graph.
+     * Attempts to connect the new node to nearby nodes if possible.
+     *
+     * @param x X-coordinate for the new node
+     * @param y Y-coordinate for the new node
+     * @return The newly created Node
+     */
     Node addNode(float x, float y) { //TODO: borde användas överallt, och aldrig direkt till nodklassen
         Node newNode = new Node(parent, x, y);
         nodes.add(newNode);
@@ -194,7 +241,12 @@ class ExplorationManager {
 
         return newNode;
     }
-
+    /**
+     * Attempts to connect a node to all visible nearby nodes.
+     * A connection is made if the nodes are within range and have line of sight.
+     *
+     * @param node The node to connect to other nodes
+     */
     void connectToVisibleNodes(Node node) {
         for (Node other : nodes) {
             if (node == other) continue;
@@ -204,49 +256,49 @@ class ExplorationManager {
             }
         }
     }
-
-    boolean canSee(PVector from, PVector to) {
-        // Check if line between points intersects with any obstacles
+    /**
+     * Checks if there is line of sight between two positions.
+     * Uses the collision system to check for obstacles.
+     *
+     * @param from Starting position
+     * @param to Ending position
+     * @return true if there is clear line of sight, false if obstructed
+     */
+    boolean canSee(PVector from, PVector to) { //TODO: varför 2 canSee?
         if (parent instanceof tanks_bas_v1_0) {
-            tanks_bas_v1_0 game = (tanks_bas_v1_0) parent; //TODO: allt borde vara i collisions.
-            if (game.allTrees != null) {
-                for (Tree tree : game.allTrees) {
-                    if (tree != null) {
-                        // Line-circle intersection test
-                        PVector line = PVector.sub(to, from);
-                        PVector treeToFrom = PVector.sub(from, tree.position);
-
-                        float a = line.dot(line);
-                        float b = 2 * treeToFrom.dot(line);
-                        float c = treeToFrom.dot(treeToFrom) - (tree.radius + 10) * (tree.radius + 10);
-
-                        float discriminant = b * b - 4 * a * c;
-
-                        if (discriminant >= 0) {
-                            // Line intersects circle
-                            float t = (-b - PApplet.sqrt(discriminant)) / (2 * a);
-                            if (t >= 0 && t <= 1) {
-                                return false; // Intersection within segment
-                            }
-                        }
-                    }
-                }
+            tanks_bas_v1_0 game = (tanks_bas_v1_0) parent;
+            if (game.collisions != null) {
+                return game.collisions.canSee(from, to);
             }
         }
         return true;
     }
-
+    /**
+     * Creates a bidirectional connection between two nodes with a specified weight.
+     *
+     * @param node1 First node to connect
+     * @param node2 Second node to connect
+     * @param weight Weight/cost of the connection
+     */
     void connectNodes(Node node1, Node node2, float weight) {
         Edge edge = new Edge(node1, node2, weight);
         edges.add(edge);
         node1.addEdge(node2, weight);
         node2.addEdge(node1, weight); // Bidirectional connection
     }
-
+    /**
+     * Checks if auto-exploration mode is currently active.
+     *
+     * @return true if auto-exploration is active, false otherwise
+     */
     public boolean isAutoExploreActive() {
         return autoExplore;
     }
-
+    /**
+     * Toggles the auto-exploration mode on or off.
+     * When enabled, the tank will automatically explore the environment.
+     * When disabled, the tank will stop moving.
+     */
     void toggleAutoExplore() {
         autoExplore = !autoExplore;
         if (autoExplore) {
@@ -257,7 +309,11 @@ class ExplorationManager {
             tank.state = 0; // Stop the tank
         }
     }
-
+    /**
+     * Main navigation method that controls the tank's movement.
+     * Handles different navigation states: exploring, moving to target,
+     * backtracking, and returning home.
+     */
     void navigation() {
         if (!autoExplore || tank == null) return;
 
@@ -281,9 +337,14 @@ class ExplorationManager {
                     moveTowardTarget();
                 }
 
-                if (PVector.dist(tank.position, baseNode.position) < 50) {
-                    System.out.println("should be home here");
-                    navState = NavigationState.EXPLORING;
+                if (PVector.dist(tank.position, baseNode.position) < 10) {
+                    tank.state = 0;
+                    startPositionCounter++;
+                    if(startPositionCounter >= 180){
+                        System.out.println("should be home here");
+                        navState = NavigationState.EXPLORING;
+                        startPositionCounter = 0;
+                    }
                 }
                 break;
             case EXPLORING:
@@ -317,7 +378,10 @@ class ExplorationManager {
                 break;
         }
     }
-
+    /**
+     * Moves the tank toward the current target node.
+     * Sets the tank's state (direction) based on the direction to the target.
+     */
     void moveTowardTarget() {
         if (targetNode == null) return;
 
@@ -360,7 +424,12 @@ class ExplorationManager {
             targetNode = null;
         }
     }
-
+    /**
+     * Selects the next target node for exploration.
+     * Prioritizes unvisited nodes that are visible and not in the home base.
+     *
+     * @return The selected node for exploration, or null if no suitable node was found
+     */
     Node selectExplorationTarget() {
         // First, try to find an unvisited node nearby
         ArrayList<Node> candidates = new ArrayList<Node>();
@@ -393,7 +462,10 @@ class ExplorationManager {
         // If no unvisited nodes nearby, try generating a new target in unexplored space
         return null;
     }
-
+    /**
+     * Expands the exploration graph using Rapidly-exploring Random Tree (RRT) algorithm.
+     * Creates new nodes in unexplored areas to guide exploration when no valid targets exist.
+     */
     void expandRRT() {
         // Try several times to find a valid position
         for (int attempts = 0; attempts < 10; attempts++) {
@@ -436,7 +508,14 @@ class ExplorationManager {
             }
         }
     }
-
+    /**
+     * Checks if a position is valid for creating a new node.
+     * Validates that the position is not in a home base, not too close to existing nodes,
+     * and not colliding with obstacles.
+     *
+     * @param pos Position to validate
+     * @return true if the position is valid for a new node, false otherwise
+     */
     boolean isValidNodePosition(PVector pos) {
         // Check if in home base - skip these areas
         if (isInHomeBase(pos)) {
@@ -469,11 +548,25 @@ class ExplorationManager {
         }
         return true;
     }
-
+    /**
+     * Checks if a line between two points intersects with a tree.
+     * Delegates to the Collisions class if available, otherwise performs the check directly.
+     *
+     * @param start Starting point of the line
+     * @param end Ending point of the line
+     * @param center Center of the tree
+     * @param radius Radius of the tree
+     * @return true if the line intersects with the tree, false otherwise
+     */
     boolean lineIntersectsTree(PVector start, PVector end, PVector center, float radius) {
-        // Vector from start to end
+        if (parent instanceof tanks_bas_v1_0) {
+            tanks_bas_v1_0 game = (tanks_bas_v1_0) parent;
+            if (game.collisions != null) {
+                return game.collisions.lineIntersectsTree(start, end, center, radius);
+            }
+        }
+
         PVector d = PVector.sub(end, start);
-        // Vector from start to circle center
         PVector f = PVector.sub(start, center);
 
         float a = d.dot(d);
@@ -486,32 +579,31 @@ class ExplorationManager {
             return false; // No intersection
         } else {
             discriminant = (float) Math.sqrt(discriminant);
-
-            // Calculate the two intersection points
             float t1 = (-b - discriminant) / (2 * a);
             float t2 = (-b + discriminant) / (2 * a);
-
-            // Check if at least one intersection point is within the line segment
             return (t1 >= 0 && t1 <= 1) || (t2 >= 0 && t2 <= 1);
         }
     }
-
-    boolean isInHomeBase(PVector position) { //TODO: kommer behöva ändra här
-        // Check if position is in Team 0 base (red)
-        if (position.x >= 0 && position.x <= 150 &&
-                position.y >= 0 && position.y <= 350) {
-            return true;
+    /**
+     * Checks if a position is inside a home base.
+     * Delegates to the Collisions class if available.
+     *
+     * @param position Position to check
+     * @return true if the position is in a home base, false otherwise
+     */
+    boolean isInHomeBase(PVector position) {
+        if (parent instanceof tanks_bas_v1_0) {
+            tanks_bas_v1_0 game = (tanks_bas_v1_0) parent;
+            if (game.collisions != null) {
+                return game.collisions.isInHomeBase(position);
+            }
         }
-
-        // Check if position is in Team 1 base (blue)
-        if (position.x >= parent.width - 151 && position.x <= parent.width &&
-                position.y >= parent.height - 351 && position.y <= parent.height) {
-            return true;
-        }
-
         return false;
     }
-
+    /**
+     * Updates the fog of war based on visited positions.
+     * Calculates the percentage of the map that has been explored.
+     */
     void updateFog() {
         if (!initialized) return;
 
@@ -544,7 +636,10 @@ class ExplorationManager {
         fogLayer.endDraw();
         exploredPercent = (clearedPixels / (float) totalPixels) * 100;
     }
-
+    /**
+     * Displays the exploration graph and fog of war.
+     * Shows nodes, connections, and the exploration percentage.
+     */
     void display() {
         // Display all nodes and connections
         for (Node node : nodes) {
@@ -583,7 +678,10 @@ class ExplorationManager {
         parent.fill(0);
         parent.text(parent.nf(exploredPercent, 1, 2) + "% explored", 20, 20);
     }
-
+    /**
+     * Handles a collision with the map border.
+     * Adjusts navigation strategy and creates a new node near the border.
+     */
     void handleBorderCollision() {
         parent.println("Border collision detected - adjusting navigation");
 
@@ -639,7 +737,10 @@ class ExplorationManager {
             addNode(boundaryX,boundaryY);
         }
     }
-    
+    /**
+     * Initiates the return home sequence.
+     * Calculates a path back to the home base node using A* pathfinding.
+     */
     void returnHome() {
         navState = NavigationState.RETURNING_HOME;
 
@@ -650,7 +751,13 @@ class ExplorationManager {
         }
         currentNode = closestNode;
 
-        ArrayList<Node> pathingHome = aStar(closestNode, baseNode);
+
+        ArrayList<Node> pathingHome;
+
+        if(testDijkstra)
+            pathingHome = dijkstra(closestNode, baseNode);
+        else
+            pathingHome = aStar(closestNode, baseNode);
 
         if (!pathingHome.isEmpty()) {
             path.clear();
@@ -667,6 +774,61 @@ class ExplorationManager {
         }
     }
 
+    ArrayList<Node> dijkstra(Node start, Node goal){
+        Set<Node> visitedNodes = new HashSet<>();
+
+        PriorityQueue<Node> openSet = new PriorityQueue<>((a, b) ->
+                Float.compare(a.fScore, b.fScore));
+
+        for (Node node : nodes) {
+            node.gScore = Float.MAX_VALUE;
+        }
+
+        start.gScore = 0f;
+
+        HashMap<Node,Node> traveledFrom = new HashMap<>();
+
+        openSet.add(start);
+
+        while (!openSet.isEmpty()) {
+            Node current = openSet.poll();
+
+            if (current.equals(goal)) {
+                return reconstructPAth(traveledFrom,current);
+            }
+
+            visitedNodes.add(current);
+
+            for (Edge edge : current.edges) {
+                if (!edge.traversable) continue;
+
+                Node neighbor = edge.destination;
+                if (visitedNodes.contains(neighbor)) continue;
+
+                float currentGScore = current.gScore + edge.weight;
+
+                if (currentGScore < neighbor.gScore) {
+                    traveledFrom.put(neighbor, current);
+
+                    neighbor.gScore = current.gScore;
+
+                    if (!openSet.contains(neighbor)) {
+                        openSet.add(neighbor);
+                    }
+                }
+            }
+        }
+        return new ArrayList<>();
+
+
+    }
+    /**
+     * Implements the A* pathfinding algorithm to find a path between two nodes.
+     *
+     * @param start Starting node
+     * @param goal Destination node
+     * @return List of nodes representing the path from start to goal
+     */
     ArrayList<Node> aStar(Node start, Node goal) {
 
         Set<Node> visitedNodes = new HashSet<>();
@@ -717,7 +879,13 @@ class ExplorationManager {
         }
         return new ArrayList<>();
     }
-
+    /**
+     * Reconstructs the path from the A* search results.
+     *
+     * @param traveledFrom Map of nodes to their predecessor in the path
+     * @param current Current node to reconstruct the path from
+     * @return List of nodes representing the path
+     */
     private ArrayList<Node> reconstructPAth(HashMap<Node,Node> traveledFrom, Node current) {
         ArrayList<Node> path = new ArrayList<>();
 
@@ -729,15 +897,28 @@ class ExplorationManager {
         }
         return path;
     }
-
+    /**
+     * Calculates the heuristic cost between two nodes for A* pathfinding.
+     * Uses Euclidean distance as the heuristic.
+     *
+     * @param a First node
+     * @param b Second node
+     * @return Estimated cost between nodes
+     */
     private Float heuristicCost(Node a, Node b) {
         return PVector.dist(a.position, b.position);
     }
-
+    /**
+     * Checks if the tank is currently in the process of returning home.
+     *
+     * @return true if the tank is returning home, false otherwise
+     */
     public boolean isReturningHome() {
         return navState == NavigationState.RETURNING_HOME;
     }
-
+    /**
+     * Test method to trigger the return home behavior.
+     */
     void testReturnHome() {
         returnHome();
     }

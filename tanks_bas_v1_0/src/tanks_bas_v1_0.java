@@ -1,11 +1,17 @@
 import processing.core.*;
+
+/**
+ * Main game class for the tank game.
+ * Handles game initialization, updates, rendering, and input processing.
+ */
 public class tanks_bas_v1_0 extends PApplet{
-  // Följande kan användas som bas inför uppgiften.
+// Följande kan användas som bas inför uppgiften.
 // Syftet är att sammanställa alla varabelvärden i scenariet.
 // Variabelnamn har satts för att försöka överensstämma med exempelkoden.
 // Klassen Tank är minimal och skickas mer med som koncept(anrop/states/vektorer).
 
   ExplorationManager explorationManager;
+  Collisions collisions;
   boolean left, right, up, down;
   boolean mouse_pressed;
 
@@ -34,12 +40,17 @@ public class tanks_bas_v1_0 extends PApplet{
   boolean gameOver;
   boolean pause;
 
-  //======================================
+  /**
+   * Sets up the size of the game window.
+   */
   public void settings()
   {
     size(800, 800);
   }
-
+  /**
+   * Initializes the game, creating all necessary objects and setting initial state.
+   * Creates tanks, trees, collision manager, and exploration manager.
+   */
   public void setup() {
     up             = false;
     down           = false;
@@ -98,10 +109,16 @@ public class tanks_bas_v1_0 extends PApplet{
     explorationManager = new ExplorationManager(this, 25f);
     explorationManager.initializeFog();
     explorationManager.setTank(tank0);
-  }
 
+    collisions = new Collisions(this, explorationManager);
+  }
+  /**
+   * Main game loop function.
+   * Updates game logic, checks for collisions, and renders the game state.
+   */
   public void draw()
   {
+    frameRate(60);
     background(200);
     checkForInput(); // Kontrollera inmatning.
 
@@ -130,7 +147,10 @@ public class tanks_bas_v1_0 extends PApplet{
     displayGUI();
   }
 
-  //======================================
+  /**
+   * Checks for keyboard input and updates the tank's state accordingly.
+   * Does not update the controlled tank if auto-explore is active.
+   */
   void checkForInput() {
     if (explorationManager.isAutoExploreActive()) {
       // Don't override tank state when in auto-explore mode
@@ -160,7 +180,10 @@ public class tanks_bas_v1_0 extends PApplet{
   }
 
 
-  //======================================
+  /**
+   * Updates the logic for all tanks.
+   * Calls the update method for each tank to update position and state.
+   */
   void updateTanksLogic() {
     // Update all tanks
     for (Tank tank : allTanks) {
@@ -170,41 +193,21 @@ public class tanks_bas_v1_0 extends PApplet{
     }
   }
 
-  void checkForCollisions() { //TODO: ska gå över till collisions,
-    // Check for base collisions first
-    for (int i = 0; i < allTanks.length; i++) {
-      if (allTanks[i] != null) {
-        // Check for enemy base collisions first
-        allTanks[i].checkBaseCollisions();
-      }
-    }
-
-    // Then check for other collisions
-    for (int i = 0; i < allTanks.length; i++) {
-      // Skip if tank is null
-      if (allTanks[i] == null) continue;
-
-      // Check for collisions with other tanks
-      for (int j = i + 1; j < allTanks.length; j++) {
-        if (allTanks[j] != null) {
-          allTanks[i].checkForCollisions(allTanks[j]);
-        }
-      }
-
-      boolean treeCollision = allTanks[i].checkForCollisions(allTrees);
-      if (treeCollision) {
-        if (i == 0 && explorationManager != null && !explorationManager.isReturningHome()) {
-          System.out.println("Same position 60");
-          explorationManager.samePositionCounter = 60; //TODO: ugly
-        }
-      }
-      // Check for map border collisions
-      allTanks[i].checkForCollisions(new PVector(width, height));
-    }
+  /**
+   * Checks for collisions between game entities.
+   * Uses the Collisions manager to handle all collision detection and resolution.
+   */
+  void checkForCollisions() {
+    // Use the centralized collisions class to handle all collision checks
+    collisions.checkAllCollisions(allTanks, allTrees);
   }
 
 
-  //======================================
+
+  /**
+   * Displays the home bases for both teams.
+   * Draws rectangles with team colors at the appropriate locations.
+   */
   // Följande bör ligga i klassen Team
   void displayHomeBase() {
     strokeWeight(1);
@@ -216,21 +219,29 @@ public class tanks_bas_v1_0 extends PApplet{
     rect(width - 151, height - 351, 150, 350);
   }
 
-  // Följande bör ligga i klassen Tree
+  /**
+   * Displays all trees in the game world.
+   */
   void displayTrees() {
     for (Tree tree : allTrees) {
-      imageMode(CENTER);
-      image(tree_img, tree.position.x, tree.position.y);
+      if (tree != null) {
+        tree.display();
+      }
     }
-    imageMode(CORNER);
   }
-
+  /**
+   * Displays all tanks in the game world.
+   */
   void displayTanks() {
     for (Tank tank : allTanks) {
-      tank.display();
+      if (tank != null) {
+        tank.display();
+      }
     }
   }
-
+  /**
+   * Displays the game GUI, including pause and game over messages.
+   */
   void displayGUI() {
     if (pause) {
       textSize(36);
@@ -245,7 +256,10 @@ public class tanks_bas_v1_0 extends PApplet{
     }
   }
 
-  //======================================
+  /**
+   * Handles key press events.
+   * Updates movement direction flags when arrow keys are pressed.
+   */
   public void keyPressed() {
     if (key == CODED) {
       switch(keyCode) {
@@ -264,7 +278,10 @@ public class tanks_bas_v1_0 extends PApplet{
       }
     }
   }
-
+  /**
+   * Handles key release events.
+   * Updates movement direction flags and handles special keys like 'p', 'a', and 'r'.
+   */
   public void keyReleased() {
     if (key == CODED) {
       switch(keyCode) {
@@ -292,18 +309,31 @@ public class tanks_bas_v1_0 extends PApplet{
       explorationManager.toggleAutoExplore();
     }
     if (key == 'r' || key == 'R') {
+      explorationManager.testDijkstra = false;
+      explorationManager.testReturnHome();
+    }
+
+    if(key == 'd' || key == 'D'){
+      explorationManager.testDijkstra = true;
       explorationManager.testReturnHome();
     }
 
   }
 
-  // Mousebuttons
+  /**
+   * Handles mouse press events.
+   * Updates the mouse_pressed flag and prints a message.
+   */
   public void mousePressed() {
     println("---------------------------------------------------------");
     println("*** mousePressed() - Musknappen har tryckts ned.");
     mouse_pressed = true;
   }
-
+  /**
+   * Main method to start the application.
+   *
+   * @param passedArgs Command line arguments
+   */
   public static void main(String[] passedArgs) {
     String[] appletArgs = new String[]{"tanks_bas_v1_0"};
     if (passedArgs != null) {

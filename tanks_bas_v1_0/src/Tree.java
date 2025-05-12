@@ -1,8 +1,11 @@
 import processing.core.*;
-
+/**
+ * Represents a tree obstacle in the game world.
+ * Trees obstruct movement and visibility.
+ */
 class Tree {
 
-    private PApplet parent;
+    PApplet parent;
 
     PVector position;
     String  name;
@@ -10,7 +13,14 @@ class Tree {
     float   diameter;
     float radius;
 
-    //**************************************************
+    /**
+     * Creates a new Tree at the specified position using the provided image.
+     *
+     * @param parent Reference to the Processing applet
+     * @param _image Image to use for the tree visualization
+     * @param _posx X-coordinate for the tree position
+     * @param _posy Y-coordinate for the tree position
+     */
     Tree(PApplet parent, PImage _image, float _posx, float _posy) {
         this.parent = parent;
         this.img       = _image;
@@ -21,48 +31,13 @@ class Tree {
         this.radius = diameter/2;
     }
 
-
-
-    //**************************************************
-
-    boolean checkCollision(Tank tank) {
-        PVector distanceVect = PVector.sub(tank.position, position);
-        float distanceVecMag = distanceVect.mag();
-        float minDistance = radius + tank.diameter/2;
-
-        if (distanceVecMag < minDistance) {
-
-            // Calculate overlap and push direction
-            float overlap = minDistance - distanceVecMag;
-
-            // If distanceVecMag is too small (zero or near zero), use a default direction
-            if (distanceVecMag < 1f) {
-                // Default direction away from the center of the tree
-                distanceVect = new PVector(1, 0);  // arbitrary default direction
-
-            } else {
-                // Normalize the direction vector
-                distanceVect.normalize();
-            }
-
-            // Push the tank away from the tree
-            tank.position.x += distanceVect.x * overlap;
-            tank.position.y += distanceVect.y * overlap;
-
-            // Zero out the velocity component in the collision direction
-            float dotProduct = tank.velocity.x * distanceVect.x + tank.velocity.y * distanceVect.y;
-            if (dotProduct < 0) {
-                tank.velocity.x -= dotProduct * distanceVect.x;
-                tank.velocity.y -= dotProduct * distanceVect.y;
-            }
-
-            return true;
-        }
-        return false;
-    }
-
-    //**************************************************
+    /**
+     * Displays the tree on the screen using its image.
+     * Centers the image at the tree's position.
+     */
     void display() {
-
+        parent.imageMode(parent.CENTER);
+        parent.image(img, position.x, position.y);
+        parent.imageMode(parent.CORNER);
     }
 }
