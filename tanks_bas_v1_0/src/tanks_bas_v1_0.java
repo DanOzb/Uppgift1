@@ -98,7 +98,7 @@ public class tanks_bas_v1_0 extends PApplet{
     tank4 = new Tank(this,"tank4", team1_tank1_startpos,tank_size, team1Color );
     tank5 = new Tank(this,"tank5", team1_tank2_startpos,tank_size, team1Color );
 
-    allTanks[0] = tank0;                         // Symbol samma som index!
+    allTanks[0] = tank0;
     allTanks[1] = tank1;
     allTanks[2] = tank2;
     allTanks[3] = tank3;
@@ -120,7 +120,7 @@ public class tanks_bas_v1_0 extends PApplet{
   {
     frameRate(60);
     background(200);
-    checkForInput(); // Kontrollera inmatning.
+    checkForInput();
 
     if (!gameOver && !pause) {
       // UPDATE LOGIC
@@ -153,11 +153,8 @@ public class tanks_bas_v1_0 extends PApplet{
    */
   void checkForInput() {
     if (explorationManager.isAutoExploreActive()) {
-      // Don't override tank state when in auto-explore mode
       return;
     }
-
-    // Calculate combined state based on key presses
     if (right && down) {
       tank0.state = 5; // Right + Down
     } else if (right && up) {
@@ -198,7 +195,6 @@ public class tanks_bas_v1_0 extends PApplet{
    * Uses the Collisions manager to handle all collision detection and resolution.
    */
   void checkForCollisions() {
-    // Use the centralized collisions class to handle all collision checks
     collisions.checkAllCollisions(allTanks, allTrees);
   }
 
@@ -246,7 +242,7 @@ public class tanks_bas_v1_0 extends PApplet{
     if (pause) {
       textSize(36);
       fill(30);
-      text("...Paused! (\'p\'-continues)\n(arrow keys-change direction)", (float) (width/1.7-100), (float) (height/2.5));
+      text("...Paused! (\'p\'-continues)\n(arrow keys-change direction)\n(\'a\'-auto explores environment)\n(\'r'\'-returns home with A*)\n(\'d\'-returns home with dijkstra)", (float) (width/2.45), (float) (height/3));
     }
 
     if (gameOver) {
@@ -304,8 +300,7 @@ public class tanks_bas_v1_0 extends PApplet{
       pause = !pause;
     }
 
-    if (key == 'a') {
-      // Toggle auto-exploration mode
+    if (key == 'a' || key == 'A') {
       explorationManager.toggleAutoExplore();
     }
     if (key == 'r' || key == 'R') {

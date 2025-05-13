@@ -17,7 +17,7 @@ class Tank {
 
     String navState = "Idle";
     PImage img;
-    int col; // Change from 'color', works still
+    int col;
     float diameter;
     float speed;
     float maxspeed;
@@ -48,9 +48,9 @@ class Tank {
         this.velocity     = new PVector(0, 0);
         this.acceleration = new PVector(0, 0);
 
-        this.state        = 0; // 0(still), 1(moving)
+        this.state        = 0;
         this.speed        = 1;
-        this.maxspeed     = 2;  // Reduced maxspeed to make DFS more visible
+        this.maxspeed     = 2;
         this.isInTransition = false;
         this.collisionDetected = false;
 
@@ -121,7 +121,6 @@ class Tank {
      * @param y Y-coordinate offset from tank's position
      */
     void drawTank(float x, float y) {
-        // Use fill() to set the color, which is fine here
         parent.fill(this.col, 50);
 
         parent.ellipse(x, y, 50, 50);
@@ -140,7 +139,7 @@ class Tank {
      * Shows the tank body, field of view, and information (name, position, state).
      */
     void display() {
-        parent.fill(this.col);  // Use fill() for colors
+        parent.fill(this.col);
         parent.strokeWeight(1);
 
         parent.pushMatrix();  // Transformations (translate, rotate, etc.)
@@ -150,12 +149,12 @@ class Tank {
         displayFOV();
 
         parent.imageMode(parent.CENTER);
-        drawTank(0, 0);  // Draw the tank itself
+        drawTank(0, 0);
         parent.imageMode(parent.CORNER);
 
         parent.strokeWeight(1);
         parent.fill(230, 50f);
-        parent.rect(0 + 25, 0 - 25, 100, 60);  // Displaying info above the tank
+        parent.rect(0 + 25, 0 - 25, 100, 60);
         parent.fill(30);
         parent.textSize(15);
         parent.text(navState + "\n" + this.name + "\n( " + (int)this.position.x + ", " + (int)this.position.y + " )", 25 + 5, -5 - 5);

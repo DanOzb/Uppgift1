@@ -7,7 +7,7 @@ import processing.core.*;
 
 public class Collisions {
     private PApplet parent;
-    private ExplorationManager explorationManager;
+    private ExplorationManager explManager;
 
     /**
      * Constructs a new Collisions manager.
@@ -18,7 +18,7 @@ public class Collisions {
 
     public Collisions(PApplet parent, ExplorationManager explorationManager) {
         this.parent = parent;
-        this.explorationManager = explorationManager;
+        this.explManager = explorationManager;
     }
 
     /**
@@ -30,13 +30,13 @@ public class Collisions {
      * @param allTrees Array of Tree objects to check for collisions with tanks
      */
     public void checkAllCollisions(Tank[] allTanks, Tree[] allTrees) {
-        for (Tank tank : allTanks) { // check for collisions
+        for (Tank tank : allTanks) {
             if (tank != null) {
-                checkBaseCollisions(tank); // first check if the collision is with a base
+                checkBaseCollisions(tank);
             }
         }
 
-        for (int i = 0; i < allTanks.length; i++) { // then check the rest of the collisions
+        for (int i = 0; i < allTanks.length; i++) {
             if (allTanks[i] == null) continue;
 
             for (int j = i + 1; j < allTanks.length; j++) {
@@ -46,10 +46,10 @@ public class Collisions {
             }
 
             boolean treeCollision = checkTreeCollisions(allTanks[i], allTrees);
-            if (treeCollision && i == 0 && explorationManager != null && !explorationManager.isReturningHome()) {
-                explorationManager.samePositionCounter = 60; //stuck detection
+            if (treeCollision && i == 0 && explManager != null && !explManager.isReturningHome()) {
+                explManager.samePositionCounter = 60;
             }
-            checkBorderCollisions(allTanks[i]); //check for border collisions
+            checkBorderCollisions(allTanks[i]);
         }
     }
 
@@ -61,7 +61,7 @@ public class Collisions {
      * @return true if in enemy base, otherwise false
      */
     public boolean isInEnemyBase(Tank tank) {
-        if (tank.col == parent.color(204, 50, 50)) { // red base
+        if (tank.col == parent.color(204, 50, 50)) {
             return (tank.position.x >= parent.width - 151 && tank.position.y >= parent.height - 351);
         }
         else if (tank.col == parent.color(0, 150, 200)) { // blue base
@@ -82,16 +82,14 @@ public class Collisions {
         PVector positionIsEnemyBase = PVector.add(tank.position, tank.velocity);
         boolean collided = false;
 
-        // Team 0 tanks (red) hitting Team 1 base (blue)
+
         if (tank.col == parent.color(204, 50, 50)) {
             if (positionIsEnemyBase.x >= parent.width - 151 && tank.position.y >= parent.height - 351) {
-                // Will hit left boundary of blue base
                 tank.velocity.x = 0;
                 tank.position.x = parent.width - 151 - 1;
                 collided = true;
             }
             if (positionIsEnemyBase.y >= parent.height - 351 && tank.position.x >= parent.width - 151) {
-                // Will hit top boundary of blue base
                 tank.velocity.y = 0;
                 tank.position.y = parent.height - 351 - 1;
                 collided = true;
@@ -99,39 +97,32 @@ public class Collisions {
             // Handle corner approach
             if (positionIsEnemyBase.x >= parent.width - 151 && positionIsEnemyBase.y >= parent.height - 351 &&
                     tank.position.x < parent.width - 151 && tank.position.y < parent.height - 351) {
-                // Approaching the corner - stop both directions
                 tank.velocity.mult(0);
                 collided = true;
             }
         }
-        // Team 1 tanks (blue) hitting Team 0 base (red)
         else if (tank.col == parent.color(0, 150, 200)) {
             if (positionIsEnemyBase.x <= 150 && tank.position.y <= 350) {
-                // Will hit right boundary of red base
                 tank.velocity.x = 0;
                 tank.position.x = 150 + 1;
                 collided = true;
             }
             if (positionIsEnemyBase.y <= 350 && tank.position.x <= 150) {
-                // Will hit bottom boundary of red base
                 tank.velocity.y = 0;
                 tank.position.y = 350 + 1;
                 collided = true;
             }
-            // Handle corner approach
             if (positionIsEnemyBase.x <= 150 && positionIsEnemyBase.y <= 350 &&
                     tank.position.x > 150 && tank.position.y > 350) {
-                // Approaching the corner - stop both directions
                 tank.velocity.mult(0);
                 collided = true;
             }
         }
 
         if (collided) {
-            // If exploration manager exists, tell it to return home
-            if (explorationManager != null && parent instanceof tanks_bas_v1_0) {
+            if (explManager != null && parent instanceof tanks_bas_v1_0) {
                 System.out.println("Collided with enemy base");
-                explorationManager.returnHome();
+                explManager.returnHome();
             }
             parent.println(tank.name + " detected enemy base - returning home");
         }
@@ -146,9 +137,8 @@ public class Collisions {
      * @param otherTank Second tank in the collision
      */
     public void checkTankCollision(Tank tank, Tank otherTank) {
-        if (tank == otherTank) return; // Skip self-collision
+        if (tank == otherTank) return;
 
-        // Check if tanks are from the same team (same color)
         boolean sameTeam = tank.col == otherTank.col;
 
         PVector distanceVect = PVector.sub(tank.position, otherTank.position);
@@ -156,29 +146,23 @@ public class Collisions {
         float minDistance = tank.diameter/2 + otherTank.diameter/2;
 
         if (distanceVecMag < minDistance) {
-            // If same team, stop and change direction instead of pushing
             if (sameTeam) {
-                // Stop moving
                 tank.velocity.mult(0);
 
-                // Change direction - move away from friendly tank
                 if (Math.abs(distanceVect.x) > Math.abs(distanceVect.y)) {
-                    tank.state = distanceVect.x > 0 ? 1 : 2; // Right or Left
+                    tank.state = distanceVect.x > 0 ? 1 : 2;
                 } else {
-                    tank.state = distanceVect.y > 0 ? 3 : 4; // Down or Up
+                    tank.state = distanceVect.y > 0 ? 3 : 4;
                 }
 
                 parent.println(tank.name + " detected friendly " + otherTank.name + " and changed direction");
                 return;
             }
 
-            // For enemy tanks, continue with normal collision response
-            // Calculate overlap and push direction
             float overlap = minDistance - distanceVecMag;
 
-            // If tanks are directly on top of each other, use a default direction
             if (distanceVecMag < 0.1f) {
-                distanceVect = new PVector(1, 0);  // arbitrary default direction
+                distanceVect = new PVector(1, 0);
             } else {
                 distanceVect.normalize();
             }
@@ -189,7 +173,6 @@ public class Collisions {
             otherTank.position.x -= distanceVect.x * overlap * 0.5f;
             otherTank.position.y -= distanceVect.y * overlap * 0.5f;
 
-            // Zero out the velocity component in the collision direction
             float dotProduct = tank.velocity.x * distanceVect.x + tank.velocity.y * distanceVect.y;
             if (dotProduct < 0) {
                 tank.velocity.x -= dotProduct * distanceVect.x;
@@ -216,23 +199,18 @@ public class Collisions {
             if (tree != null && checkTreeCollision(tank, tree)) {
                 collisionDetected = true;
 
-                // If auto-explore is active, let the exploration manager know
-                if (parent instanceof tanks_bas_v1_0) {
-                    tanks_bas_v1_0 game = (tanks_bas_v1_0) parent;
-                    if (game.explorationManager != null && game.explorationManager.isAutoExploreActive()) {
-                        if (!game.explorationManager.isReturningHome()) {
-                            game.explorationManager.handleBorderCollision();
-                        } else {
-                            tank.velocity.mult(0.5f);
-                        }
+                if (explManager != null && explManager.isAutoExploreActive()) {
+                    if (!explManager.isReturningHome()) {
+                        handleBorderCollision();
+                    } else {
+                        tank.velocity.mult(0.5f);
                     }
                 }
             }
         }
 
-        // If a collision was detected, temporarily slow the tank's movement
         if (collisionDetected) {
-            tank.velocity.mult(0.5f);  // Significant velocity reduction but not complete stop
+            tank.velocity.mult(0.5f);
         }
         return collisionDetected;
     }
@@ -252,23 +230,17 @@ public class Collisions {
         float minDistance = tree.radius + tank.diameter/2;
 
         if (distanceVecMag < minDistance) {
-            // Calculate overlap and push direction
             float overlap = minDistance - distanceVecMag;
 
-            // If distanceVecMag is too small (zero or near zero), use a default direction
             if (distanceVecMag < 1f) {
-                // Default direction away from the center of the tree
-                distanceVect = new PVector(1, 0);  // arbitrary default direction
+                distanceVect = new PVector(1, 0);
             } else {
-                // Normalize the direction vector
                 distanceVect.normalize();
             }
 
-            // Push the tank away from the tree
             tank.position.x += distanceVect.x * overlap;
             tank.position.y += distanceVect.y * overlap;
 
-            // Zero out the velocity component in the collision direction
             float dotProduct = tank.velocity.x * distanceVect.x + tank.velocity.y * distanceVect.y;
             if (dotProduct < 0) {
                 tank.velocity.x -= dotProduct * distanceVect.x;
@@ -293,33 +265,32 @@ public class Collisions {
 
         if (tank.position.x + r > parent.width) { // Right border
             tank.position.x = parent.width - r;
-            tank.velocity.x = -tank.velocity.x * 0.5f; // Bounce with friction
+            tank.velocity.x = -tank.velocity.x * 0.5f;
             collision = true;
         }
 
         if (tank.position.y + r > parent.height) { // Bottom border
             tank.position.y = parent.height - r;
-            tank.velocity.y = -tank.velocity.y * 0.5f; // Bounce with friction
+            tank.velocity.y = -tank.velocity.y * 0.5f;
             collision = true;
         }
 
         if (tank.position.x - r < 0) { // Left border
             tank.position.x = r;
-            tank.velocity.x = -tank.velocity.x * 0.5f; // Bounce with friction
+            tank.velocity.x = -tank.velocity.x * 0.5f;
             collision = true;
         }
 
         if (tank.position.y - r < 0) { // Top border
             tank.position.y = r;
-            tank.velocity.y = -tank.velocity.y * 0.5f; // Bounce with friction
+            tank.velocity.y = -tank.velocity.y * 0.5f;
             collision = true;
         }
 
-        if (collision && parent instanceof tanks_bas_v1_0) {
-            tanks_bas_v1_0 game = (tanks_bas_v1_0) parent;
-            if (game.explorationManager != null) {
-                if (!game.explorationManager.isReturningHome()) {
-                    game.explorationManager.handleBorderCollision();
+        if (collision) {
+            if (explManager != null) {
+                if (!explManager.isReturningHome()) {
+                    handleBorderCollision();
                 } else {
                     System.out.println("explorationmanager hit border but still returning home");
                 }
@@ -339,9 +310,7 @@ public class Collisions {
      */
 
     public boolean lineIntersectsTree(PVector start, PVector end, PVector treeCenter, float treeRadius) {
-        // Vector from start to end
         PVector d = PVector.sub(end, start);
-        // Vector from start to circle center
         PVector f = PVector.sub(start, treeCenter);
 
         float a = d.dot(d);
@@ -351,15 +320,13 @@ public class Collisions {
         float discriminant = b * b - 4 * a * c;
 
         if (discriminant < 0) {
-            return false; // No intersection
+            return false;
         } else {
             discriminant = (float) Math.sqrt(discriminant);
 
-            // Calculate the two intersection points
             float t1 = (-b - discriminant) / (2 * a);
             float t2 = (-b + discriminant) / (2 * a);
 
-            // Check if at least one intersection point is within the line segment
             return (t1 >= 0 && t1 <= 1) || (t2 >= 0 && t2 <= 1);
         }
     }
@@ -374,13 +341,11 @@ public class Collisions {
      */
 
     public boolean canSee(PVector from, PVector to) {
-        // Check if line between points intersects with any obstacles
         if (parent instanceof tanks_bas_v1_0) {
             tanks_bas_v1_0 game = (tanks_bas_v1_0) parent;
             if (game.allTrees != null) {
                 for (Tree tree : game.allTrees) {
                     if (tree != null) {
-                        // Use line-circle intersection test
                         if (lineIntersectsTree(from, to, tree.position, tree.radius + 10)) {
                             return false;
                         }
@@ -399,18 +364,63 @@ public class Collisions {
      */
 
     public boolean isInHomeBase(PVector position) {
-        // Check if position is in Team 0 base (red)
         if (position.x >= 0 && position.x <= 150 &&
                 position.y >= 0 && position.y <= 350) {
             return true;
         }
 
-        // Check if position is in Team 1 base (blue)
         if (position.x >= parent.width - 151 && position.x <= parent.width &&
                 position.y >= parent.height - 351 && position.y <= parent.height) {
             return true;
         }
 
         return false;
+    }
+
+    /**
+     * Handles a collision with the map border.
+     * Adjusts navigation strategy and creates a new node near the border.
+     */
+    void handleBorderCollision() {
+        parent.println("Border collision detected - adjusting navigation");
+
+        if (explManager.navState == ExplorationManager.NavigationState.MOVING_TO_TARGET) {
+            if (explManager.targetNode != null) {
+                explManager.stuckCounter++;
+                if (explManager.stuckCounter > 3) {
+                    parent.println("Giving up on current target after multiple collisions");
+                    explManager.navState = ExplorationManager.NavigationState.EXPLORING;
+                    explManager.targetNode = null;
+                    explManager.stuckCounter = 0;
+                } else {
+                    float randomAngle = explManager.random.nextFloat() * PApplet.TWO_PI;
+                    PVector escapeDirection = new PVector(PApplet.cos(randomAngle), PApplet.sin(randomAngle));
+
+                    if (Math.abs(escapeDirection.x) > Math.abs(escapeDirection.y)) {
+                        explManager.tank.state = escapeDirection.x > 0 ? 1 : 2;
+                    } else {
+                        explManager.tank.state = escapeDirection.y > 0 ? 3 : 4;
+                    }
+                }
+            }
+        } else {
+            PVector center = new PVector(parent.width/2, parent.height/2);
+            PVector directionToCenter = PVector.sub(center, explManager.tank.position);
+            directionToCenter.normalize();
+
+            if (Math.abs(directionToCenter.x) > Math.abs(directionToCenter.y)) {
+                explManager.tank.state = directionToCenter.x > 0 ? 1 : 2;
+            } else {
+                explManager.tank.state = directionToCenter.y > 0 ? 3 : 4;
+            }
+        }
+
+        float padding = 30;
+        float boundaryX = PApplet.constrain(explManager.tank.position.x, padding, parent.width - padding);
+        float boundaryY = PApplet.constrain(explManager.tank.position.y, padding, parent.height - padding);
+
+        if (explManager.isValidNodePosition(explManager.tank.position)) {
+            explManager.addNode(boundaryX,boundaryY);
+        }
     }
 }

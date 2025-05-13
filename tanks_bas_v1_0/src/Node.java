@@ -49,7 +49,6 @@ class Node {
      * @param weight The weight/cost of the connection
      */
     void addEdge(Node destination, float weight){
-        // Check if edge already exists
         boolean edgeExists = false;
         for (Edge edge : edges) {
             if (edge.destination == destination) {
@@ -70,14 +69,13 @@ class Node {
         visited = true;
         visitCount++;
         lastVisitTime = parent.millis();
-        explorationValue = 0; // Reset exploration value upon visit
+        explorationValue = 0;
     }
     /**
      * Displays the node on screen.
      * Visualizes the node differently based on whether it has been visited.
      */
     void display(){ //TODO: kolla i exploration manager, den här kanske ska ligga här
-        // This is now handled in ExplorationManager to centralize visualization
         parent.fill(visited ? parent.color(150, 200, 150) : parent.color(200, 150, 150), 150);
         parent.noStroke();
         parent.ellipse(position.x, position.y, 12, 12);
