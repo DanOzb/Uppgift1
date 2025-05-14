@@ -142,7 +142,7 @@ class Tank {
         parent.fill(this.col);
         parent.strokeWeight(1);
 
-        parent.pushMatrix();  // Transformations (translate, rotate, etc.)
+        parent.pushMatrix();
 
         parent.translate(this.position.x, this.position.y);
 
@@ -159,7 +159,7 @@ class Tank {
         parent.textSize(15);
         parent.text(navState + "\n" + this.name + "\n( " + (int)this.position.x + ", " + (int)this.position.y + " )", 25 + 5, -5 - 5);
 
-        parent.popMatrix();  // Revert transformations
+        parent.popMatrix();
     }
     /**
      * Displays the field of view (FOV) around the tank.

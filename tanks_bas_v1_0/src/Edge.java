@@ -1,10 +1,9 @@
-
 /**
  * Represents an edge in the navigation graph.
  * Edges connect nodes and store information about the connection such as weight and traversability.
  */
 
-public class Edge {
+class Edge {
     Node source;
     Node destination;
     float weight;

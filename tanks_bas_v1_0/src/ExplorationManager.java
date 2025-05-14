@@ -10,6 +10,7 @@ import java.util.*;
 
 class ExplorationManager {
     PApplet parent;
+    Collisions collisionsManager;
 
     PGraphics fogLayer;
     int fogColor;
@@ -25,7 +26,7 @@ class ExplorationManager {
     ArrayList<PVector> path;
     Random random;
 
-    Tank tank;
+    private Tank tank;
     boolean autoExplore;
     float visibilityRadius;
     float minNodeDistance;
@@ -170,7 +171,7 @@ class ExplorationManager {
         parent.println("Tank appears stuck - changing direction");
 
         float randomAngle = random.nextFloat() * PApplet.TWO_PI;
-        PVector escapeDirection = new PVector(PApplet.cos(randomAngle), PApplet.sin(randomAngle));
+        PVector escapeDirection = new PVector(parent.cos(randomAngle), parent.sin(randomAngle));
 
         if (Math.abs(escapeDirection.x) > Math.abs(escapeDirection.y)) {
             tank.state = escapeDirection.x > 0 ? 1 : 2;
@@ -246,12 +247,9 @@ class ExplorationManager {
      * @param to Ending position
      * @return true if there is clear line of sight, false if obstructed
      */
-    boolean canSee(PVector from, PVector to) { //TODO: varför 2 canSee?
-        if (parent instanceof tanks_bas_v1_0) {
-            tanks_bas_v1_0 game = (tanks_bas_v1_0) parent;
-            if (game.collisions != null) {
-                return game.collisions.canSee(from, to);
-            }
+    boolean canSee(PVector from, PVector to) {
+        if (collisionsManager != null) {
+            return collisionsManager.canSee(from, to);
         }
         return true;
     }
@@ -483,22 +481,21 @@ class ExplorationManager {
             }
         }
 
-        if (parent instanceof tanks_bas_v1_0) {
-            tanks_bas_v1_0 game = (tanks_bas_v1_0) parent;
-            if (game.allTrees != null) {
-                for (Tree tree : game.allTrees) {
-                    if(lineIntersectsTree(tank.position, pos, tree.position, tree.radius)){
+        if (collisionsManager != null && collisionsManager.trees != null) {
+            for (Tree tree : collisionsManager.trees) {
+                if (tree != null) {
+                    if (lineIntersectsTree(tank.position, pos, tree.position, tree.radius)) {
                         return false;
                     }
-                    if (tree != null) {
-                        float dist = PVector.dist(pos, tree.position);
-                        if (dist < tree.radius + 60) {
-                            return false;
-                        }
+
+                    float dist = PVector.dist(pos, tree.position);
+                    if (dist < tree.radius + 60) {
+                        return false;
                     }
                 }
             }
         }
+
         return true;
     }
     /**
@@ -512,11 +509,8 @@ class ExplorationManager {
      * @return true if the line intersects with the tree, false otherwise
      */
     boolean lineIntersectsTree(PVector start, PVector end, PVector center, float radius) {
-        if (parent instanceof tanks_bas_v1_0) {
-            tanks_bas_v1_0 game = (tanks_bas_v1_0) parent;
-            if (game.collisions != null) {
-                return game.collisions.lineIntersectsTree(start, end, center, radius);
-            }
+        if (collisionsManager != null) {
+            return collisionsManager.lineIntersectsTree(start, end, center, radius);
         }
 
         PVector d = PVector.sub(end, start);
@@ -545,12 +539,16 @@ class ExplorationManager {
      * @return true if the position is in a home base, false otherwise
      */
     boolean isInHomeBase(PVector position) {
-        if (parent instanceof tanks_bas_v1_0) {
-            tanks_bas_v1_0 game = (tanks_bas_v1_0) parent;
-            if (game.collisions != null) {
-                return game.collisions.isInHomeBase(position);
-            }
+        if (position.x >= 0 && position.x <= 150 &&
+                position.y >= 0 && position.y <= 350) {
+            return true; // Team 0 (red) base
         }
+
+        if (position.x >= parent.width - 151 && position.x <= parent.width &&
+                position.y >= parent.height - 351 && position.y <= parent.height) {
+            return true; // Team 1 (blue) base
+        }
+
         return false;
     }
     /**

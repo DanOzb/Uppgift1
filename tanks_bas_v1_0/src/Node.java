@@ -15,7 +15,6 @@ class Node {
     boolean visited;
     int visitCount;
 
-    // Add exploration metrics
     float explorationValue;
     float lastVisitTime;
 
