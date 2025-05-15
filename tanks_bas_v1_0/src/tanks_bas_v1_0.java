@@ -15,6 +15,10 @@ public class tanks_bas_v1_0 extends PApplet{
   boolean left, right, up, down;
   boolean mouse_pressed;
 
+  Team team0;
+  Team team1;
+  TankAgent tankAgent0;
+
   PImage tree_img;
   PVector tree1_pos, tree2_pos, tree3_pos;
 
@@ -105,19 +109,27 @@ public class tanks_bas_v1_0 extends PApplet{
     allTanks[4] = tank4;
     allTanks[5] = tank5;
 
-    // Create the exploration manager with a step size of 25
-    explorationManager = new ExplorationManager(this, 25f);
-    explorationManager.initializeFog();
-    explorationManager.setTank(tank0);
+    collisions = new Collisions(this);
+    collisions.setTrees(allTrees);
 
-    collisions = new Collisions(this, explorationManager);
+    team0 = new Team(this, team0Color, new PVector(0, 0), new PVector(150, 350));
+    team1 = new Team(this, team1Color, new PVector(width - 151, height - 351), new PVector(150, 350));
+
+    team0.addTank(tank0);
+    team0.addTank(tank1);
+    //team0.addTank(tank2);
+
+    tankAgent0 = team0.agents.get(0);
+
+    team0.setupCollisionHandlers(collisions);
+
+    explorationManager = tankAgent0.explorationManager;
   }
   /**
    * Main game loop function.
    * Updates game logic, checks for collisions, and renders the game state.
    */
-  public void draw()
-  {
+  public void draw() {
     frameRate(60);
     background(200);
     checkForInput();
@@ -128,31 +140,32 @@ public class tanks_bas_v1_0 extends PApplet{
       // CHECK FOR COLLISIONS
       checkForCollisions();
 
-      if(explorationManager.exploredPercent >= 80){ //ändra senare
+      // CHANGED: Use team's exploration percent instead
+      if (team0.getExplorationPercent() >= 80) {
         gameOver = true;
-      }else{
-        // Update exploration
-        explorationManager.updateTankPosition();
-        explorationManager.navigation();
+      } else {
+        // CHANGED: Update via team instead of directly
+        team0.update();
       }
-
-
     }
 
     // UPDATE DISPLAY
-    displayHomeBase();
+    // CHANGED: Let team handle its base display
+    team0.displayHomeBase();
     displayTrees();
-    explorationManager.display(); // This displays both nodes and fog
+    // CHANGED: Use team display
+    team0.display();
     displayTanks();
     displayGUI();
   }
+
 
   /**
    * Checks for keyboard input and updates the tank's state accordingly.
    * Does not update the controlled tank if auto-explore is active.
    */
   void checkForInput() {
-    if (explorationManager.isAutoExploreActive()) {
+    if (tankAgent0.isAutoExploreActive()) {
       return;
     }
     if (right && down) {
@@ -301,16 +314,16 @@ public class tanks_bas_v1_0 extends PApplet{
     }
 
     if (key == 'a' || key == 'A') {
-      explorationManager.toggleAutoExplore();
+      team0.toggleAutoExplore();
     }
     if (key == 'r' || key == 'R') {
-      explorationManager.testDijkstra = false;
-      explorationManager.testReturnHome();
+      tankAgent0.setPathfindingAlgorithm("A*");
+      team0.returnAllHome();
     }
 
     if(key == 'd' || key == 'D'){
-      explorationManager.testDijkstra = true;
-      explorationManager.testReturnHome();
+      tankAgent0.setPathfindingAlgorithm("Dijkstra");
+      tankAgent0.returnHome();
     }
 
   }

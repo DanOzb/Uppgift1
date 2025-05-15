@@ -246,11 +246,20 @@ class ExplorationManager {
      * @param to Ending position
      * @return true if there is clear line of sight, false if obstructed
      */
-    boolean canSee(PVector from, PVector to) { //TODO: varför 2 canSee?
+    boolean canSee(PVector from, PVector to) {
         if (parent instanceof tanks_bas_v1_0) {
             tanks_bas_v1_0 game = (tanks_bas_v1_0) parent;
-            if (game.collisions != null) {
-                return game.collisions.canSee(from, to);
+            // Get trees directly from the game instead of calling collisions
+            Tree[] treesToCheck = game.allTrees;
+            if (treesToCheck != null) {
+                for (Tree tree : treesToCheck) {
+                    if (tree != null) {
+                        // Use local lineIntersectsTree method instead of calling collisions
+                        if (lineIntersectsTree(from, to, tree.position, tree.radius + 10)) {
+                            return false;
+                        }
+                    }
+                }
             }
         }
         return true;
@@ -512,13 +521,7 @@ class ExplorationManager {
      * @return true if the line intersects with the tree, false otherwise
      */
     boolean lineIntersectsTree(PVector start, PVector end, PVector center, float radius) {
-        if (parent instanceof tanks_bas_v1_0) {
-            tanks_bas_v1_0 game = (tanks_bas_v1_0) parent;
-            if (game.collisions != null) {
-                return game.collisions.lineIntersectsTree(start, end, center, radius);
-            }
-        }
-
+        // Direct implementation instead of calling collisions
         PVector d = PVector.sub(end, start);
         PVector f = PVector.sub(start, center);
 
@@ -545,12 +548,16 @@ class ExplorationManager {
      * @return true if the position is in a home base, false otherwise
      */
     boolean isInHomeBase(PVector position) {
-        if (parent instanceof tanks_bas_v1_0) {
-            tanks_bas_v1_0 game = (tanks_bas_v1_0) parent;
-            if (game.collisions != null) {
-                return game.collisions.isInHomeBase(position);
-            }
+        if (position.x >= 0 && position.x <= 150 &&
+                position.y >= 0 && position.y <= 350) {
+            return true; // Team 0 (red) base
         }
+
+        if (position.x >= parent.width - 151 && position.x <= parent.width &&
+                position.y >= parent.height - 351 && position.y <= parent.height) {
+            return true; // Team 1 (blue) base
+        }
+
         return false;
     }
     /**
