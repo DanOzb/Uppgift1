@@ -536,13 +536,32 @@ class ExplorationManager {
      * @param tank The tank to select an exploration target for
      * @return The selected node for exploration, or null if no suitable node was found
      */
+    /**
+     * Selects the next target node for a tank's exploration.
+     * Now uses the tank's sensor data to make better decisions.
+     */
     Node selectExplorationTarget(Tank tank) {
         ArrayList<Node> candidates = new ArrayList<Node>();
+        ArrayList<SensorDetection> sensorData = tank.scan(
+                ((tanks_bas_v1_0)parent).allTanks,
+                ((tanks_bas_v1_0)parent).allTrees
+        );
+
+        // Check if there are any obstacles in our immediate path
+        boolean obstacleAhead = false;
+        for (SensorDetection detection : sensorData) {
+            if ((detection.type == SensorDetection.ObjectType.TREE ||
+                    detection.type == SensorDetection.ObjectType.BORDER) &&
+                    PVector.dist(tank.position, detection.position) < 100) {
+                obstacleAhead = true;
+                break;
+            }
+        }
 
         for (Node node : nodes) {
             if (!node.visited &&
                     PVector.dist(node.position, tank.position) < maxNodeDistance * 3 &&
-                    canSee(tank.position, node.position) &&
+                    (obstacleAhead || canSee(tank.position, node.position)) &&
                     !isInHomeBase(node.position) &&
                     !isNearOtherTank(node.position, tank)) {
                 candidates.add(node);
@@ -564,6 +583,46 @@ class ExplorationManager {
 
             return closest;
         }
+
+        // If no good candidates, try to identify direction with clearest path
+        if (obstacleAhead) {
+            float clearest = 0;
+            float clearestAngle = 0;
+
+            for (int angle = 0; angle < 360; angle += 45) {
+                float rad = PApplet.radians(angle);
+                PVector direction = new PVector(PApplet.cos(rad), PApplet.sin(rad));
+                PVector testPoint = PVector.add(tank.position, PVector.mult(direction, 150));
+
+                if (isValidNodePosition(testPoint, tank)) {
+                    float clearPath = 1.0f;
+                    for (SensorDetection detection : sensorData) {
+                        if (detection.type == SensorDetection.ObjectType.TREE ||
+                                detection.type == SensorDetection.ObjectType.BORDER) {
+                            PVector toDetection = PVector.sub(detection.position, tank.position);
+                            toDetection.normalize();
+                            float dotProduct = direction.dot(toDetection);
+                            if (dotProduct > 0.7) { // Within ~45 degrees
+                                clearPath -= (1.0f - PVector.dist(tank.position, detection.position) / 300.0f);
+                            }
+                        }
+                    }
+
+                    if (clearPath > clearest) {
+                        clearest = clearPath;
+                        clearestAngle = angle;
+                    }
+                }
+            }
+
+            if (clearest > 0 && isValidNodePosition(tank.position, tank)) {
+                float rad = PApplet.radians(clearestAngle);
+                PVector direction = new PVector(PApplet.cos(rad), PApplet.sin(rad));
+                PVector newPos = PVector.add(tank.position, PVector.mult(direction, 100));
+                return addNode(newPos.x, newPos.y);
+            }
+        }
+
         return null;
     }
 

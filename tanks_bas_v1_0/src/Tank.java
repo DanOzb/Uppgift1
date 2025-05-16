@@ -1,4 +1,5 @@
 import processing.core.*;
+import java.util.ArrayList;
 
 /**
  * Represents a tank entity in the game.
@@ -26,6 +27,8 @@ class Tank {
     int state;
     boolean isInTransition;
     boolean collisionDetected;
+
+    Sensor losSensor;
 
     /**
      * Creates a new Tank with the specified properties.
@@ -56,7 +59,14 @@ class Tank {
 
         this.fieldOfView = 100.0f;
 
+        this.losSensor = new Sensor(parent, this, 120.0f, PApplet.radians(45));
+
     }
+
+    ArrayList<SensorDetection> scan(Tank[] allTanks, Tree[] allTrees) {
+        return losSensor.scan(allTanks, allTrees);
+    }
+
 
     /**
      * Stops the tank's movement by setting velocity to zero.
@@ -160,6 +170,13 @@ class Tank {
         parent.text(navState + "\n" + this.name + "\n( " + (int)this.position.x + ", " + (int)this.position.y + " )", 25 + 5, -5 - 5);
 
         parent.popMatrix();
+
+        // If we have detections, visualize them
+        if (parent instanceof tanks_bas_v1_0) { //TODO: inte instanceof
+            tanks_bas_v1_0 game = (tanks_bas_v1_0) parent;
+            ArrayList<SensorDetection> detections = scan(game.allTanks, game.allTrees);
+            losSensor.visualize(detections);
+        }
     }
     /**
      * Displays the field of view (FOV) around the tank.

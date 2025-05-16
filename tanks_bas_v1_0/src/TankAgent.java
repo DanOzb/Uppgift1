@@ -1,9 +1,12 @@
 import processing.core.*;
+import java.util.ArrayList;
 
 public class TankAgent {
     PApplet parent;
     Tank tank;
     ExplorationManager explorationManager; // This is now a reference to a shared instance
+
+    ArrayList<SensorDetection> lastSensorDetections;
 
     enum AgentState {
         EXPLORING,
@@ -26,7 +29,10 @@ public class TankAgent {
         this.explorationManager.addTank(tank);
 
         this.currentState = AgentState.EXPLORING;
+
+        this.lastSensorDetections = new ArrayList<>();
     }
+
 
     void setupCollisionHandler(Collisions collisions) {
         collisions.setCollisionHandler(new CollisionHandler() {
@@ -68,7 +74,62 @@ public class TankAgent {
         });
     }
 
-    void update() {
+    void updateSensor(Tank[] allTanks, Tree[] allTrees) {
+        // Get the latest sensor readings
+        lastSensorDetections = tank.scan(allTanks, allTrees);
+
+        // Process the detections based on the current state
+        processSensorDetections();
+    }
+
+    void processSensorDetections() {
+        // If not in auto-explore mode, don't make autonomous decisions
+        if (!explorationManager.isAutoExploreActive()) return;
+
+        boolean enemyDetected = false;
+        boolean treeInWay = false;
+
+        for (SensorDetection detection : lastSensorDetections) {
+            switch (detection.type) {
+                case ENEMY:
+                    enemyDetected = true;
+                    // Handle enemy detection logic
+                    // For example, change state to ATTACKING if appropriate
+                    if (currentState == AgentState.EXPLORING) {
+                        currentState = AgentState.ATTACKING;
+                        // Could add attack behavior here
+                    }
+                    break;
+
+                case TREE:
+                    treeInWay = true;
+                    // If we're about to hit a tree, try to find a way around
+                    if (PVector.dist(tank.position, detection.position) < 50) {
+                        explorationManager.handleStuckTank(tank);
+                    }
+                    break;
+
+                case BASE:
+                    // If we detect an enemy base, mark it
+                    // This could be used for strategic planning
+                    break;
+
+                case BORDER:
+                    // If we're about to hit a border, adjust course
+                    if (PVector.dist(tank.position, detection.position) < 30) {
+                        borderCollisionHandle();
+                    }
+                    break;
+            }
+        }
+        if (currentState == AgentState.EXPLORING && treeInWay) {
+            // Try to find a clearer path
+            explorationManager.expandRRT(tank);
+        }
+    }
+
+
+    void update() { //TODO: ????
         // No need to call updateTankPosition or navigation directly
         // These are handled by the exploration manager for all tanks
     }

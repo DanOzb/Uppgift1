@@ -196,6 +196,11 @@ public class tanks_bas_v1_0 extends PApplet{
         tank.update();
       }
     }
+
+    // Update tank agents with sensor information
+    for (TankAgent agent : team0.agents) {
+      agent.updateSensor(allTanks, allTrees);
+    }
   }
 
   /**

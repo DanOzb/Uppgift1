@@ -1,4 +1,5 @@
 import processing.core.*;
+import java.util.ArrayList;
 
 /**
  * Manages all collision detection and resolution between game entities.
@@ -13,6 +14,59 @@ public class Collisions {
     public Collisions(PApplet parent) {
         this.parent = parent;
         this.trees = null;
+    }
+
+    /**
+     * Checks if a tank can see another entity directly.
+     * Uses the tank's line of sight sensor for verification.
+     *
+     * @param tank Tank to check from
+     * @param otherPosition Position of the entity to check visibility to
+     * @return true if the entity is visible to the tank, false if obstructed
+     */
+    public boolean tankCanSee(Tank tank, PVector otherPosition) {
+        if (tank == null) return false;
+
+        ArrayList<SensorDetection> detections = tank.scan(null, getTrees());
+        PVector tankToOther = PVector.sub(otherPosition, tank.position);
+        tankToOther.normalize();
+
+        // Get tank's direction
+        PVector tankDirection = new PVector();
+        switch(tank.state) {
+            case 1: tankDirection.set(1, 0); break;
+            case 2: tankDirection.set(-1, 0); break;
+            case 3: tankDirection.set(0, 1); break;
+            case 4: tankDirection.set(0, -1); break;
+            case 5: tankDirection.set(1, 1).normalize(); break;
+            case 6: tankDirection.set(1, -1).normalize(); break;
+            case 7: tankDirection.set(-1, 1).normalize(); break;
+            case 8: tankDirection.set(-1, -1).normalize(); break;
+            default: tankDirection.set(1, 0); break;
+        }
+
+        // Check if otherPosition is in the tank's field of view
+        float dotProduct = tankDirection.dot(tankToOther);
+        float angle = PApplet.acos(dotProduct);
+
+        if (angle > tank.losSensor.viewAngle / 2) {
+            return false; // Not in field of view
+        }
+
+        // Check if any detection is closer than the otherPosition
+        float distToOther = PVector.dist(tank.position, otherPosition);
+
+        for (SensorDetection detection : detections) {
+            if (detection.type == SensorDetection.ObjectType.TREE ||
+                    detection.type == SensorDetection.ObjectType.BORDER) {
+                float distToDetection = PVector.dist(tank.position, detection.position);
+                if (distToDetection < distToOther) {
+                    return false; // View is obstructed
+                }
+            }
+        }
+
+        return true;
     }
 
     public void setCollisionHandler(CollisionHandler handler) {
