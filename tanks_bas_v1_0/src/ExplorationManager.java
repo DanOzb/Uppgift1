@@ -252,8 +252,7 @@ class ExplorationManager {
             tank.state = escapeDirection.y > 0 ? 3 : 4;
         }
 
-        if (targetNodes.containsKey(tank) && targetNodes.get(tank) != null || navStates.get(tank) == NavigationState.RETURNING_HOME) { //TODO: bandaid
-            System.out.println("HAS SEEN A TREE THEREFORE TURNED INTO EXPLORING");
+        if (targetNodes.containsKey(tank) && targetNodes.get(tank) != null || navStates.get(tank) == NavigationState.RETURNING_HOME) {
             navStates.put(tank, NavigationState.EXPLORING);
             targetNodes.put(tank, null);
         }
@@ -473,7 +472,7 @@ class ExplorationManager {
                 moveTowardTarget(tank);
                 targetNode = targetNodes.get(tank);
 
-                if (targetNode != null && PVector.dist(tank.position, targetNode.position) < 50) {
+                if (targetNode != null && PVector.dist(tank.position, targetNode.position) < 50 || navStates.get(tank) == NavigationState.RETURNING_HOME) {
                     targetNode.markVisited();
                     navStates.put(tank, NavigationState.EXPLORING);
                     targetNodes.put(tank, null);
