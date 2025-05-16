@@ -3,7 +3,7 @@ import processing.core.*;
 public class TankAgent {
     PApplet parent;
     Tank tank;
-    ExplorationManager explorationManager;
+    ExplorationManager explorationManager; // This is now a reference to a shared instance
 
     enum AgentState {
         EXPLORING,
@@ -14,15 +14,16 @@ public class TankAgent {
 
     AgentState currentState;
 
-    // 2-argument constructor
-    TankAgent(PApplet parent, Tank tank) {
+    // 2-argument constructor with shared exploration manager
+    TankAgent(PApplet parent, Tank tank, ExplorationManager explorationManager) {
         this.parent = parent;
         this.tank = tank;
 
-        // Create and initialize ExplorationManager
-        this.explorationManager = new ExplorationManager(parent, 100.0f);
-        this.explorationManager.setTank(tank);
-        this.explorationManager.initializeFog();
+        // Store the shared exploration manager
+        this.explorationManager = explorationManager;
+
+        // Add this tank to the exploration manager
+        this.explorationManager.addTank(tank);
 
         this.currentState = AgentState.EXPLORING;
     }
@@ -40,7 +41,11 @@ public class TankAgent {
             public void handleTreeCollision(Tank collidedTank, Tree tree) {
                 if (collidedTank == tank) {
                     if (tree == null) {
-                        explorationManager.samePositionCounter = 60;
+                        // Notify exploration manager about persistent collision
+                        Integer counter = explorationManager.samePositionCounters.get(tank);
+                        if (counter != null) {
+                            explorationManager.samePositionCounters.put(tank, 60);
+                        }
                     }
                 }
             }
@@ -48,7 +53,7 @@ public class TankAgent {
             @Override
             public boolean isReturningHome(Tank checkTank) {
                 if (checkTank == tank) {
-                    return explorationManager.isReturningHome();
+                    return explorationManager.isReturningHome(tank);
                 }
                 return false;
             }
@@ -57,28 +62,36 @@ public class TankAgent {
             public void handleEnemyBaseCollision(Tank collidedTank) {
                 if (collidedTank == tank) {
                     System.out.println("Tank " + tank.name + " collided with enemy base");
-                    explorationManager.returnHome();
+                    explorationManager.returnAllHome();
                 }
             }
         });
     }
 
     void update() {
-        explorationManager.updateTankPosition();
-        explorationManager.navigation();
+        // No need to call updateTankPosition or navigation directly
+        // These are handled by the exploration manager for all tanks
     }
 
     void borderCollisionHandle() {
         parent.println("Border collision detected - adjusting navigation");
 
-        if (explorationManager.navState == ExplorationManager.NavigationState.MOVING_TO_TARGET) {
-            if (explorationManager.targetNode != null) {
-                explorationManager.stuckCounter++;
-                if (explorationManager.stuckCounter > 3) {
+        Integer stuckCounter = explorationManager.stuckCounters.get(tank);
+        if (stuckCounter == null) {
+            stuckCounter = 0;
+        }
+
+        ExplorationManager.NavigationState navState = explorationManager.navStates.get(tank);
+        Node targetNode = explorationManager.targetNodes.get(tank);
+
+        if (navState == ExplorationManager.NavigationState.MOVING_TO_TARGET) {
+            if (targetNode != null) {
+                stuckCounter++;
+                if (stuckCounter > 3) {
                     parent.println("Giving up on current target after multiple collisions");
-                    explorationManager.targetNode = null;
-                    explorationManager.navState = ExplorationManager.NavigationState.EXPLORING;
-                    explorationManager.stuckCounter = 0;
+                    explorationManager.targetNodes.put(tank, null);
+                    explorationManager.navStates.put(tank, ExplorationManager.NavigationState.EXPLORING);
+                    stuckCounter = 0;
                 } else {
                     float randomAngle = explorationManager.random.nextFloat() * PApplet.TWO_PI;
                     PVector escapeDirection = new PVector(PApplet.cos(randomAngle), PApplet.sin(randomAngle));
@@ -102,16 +115,19 @@ public class TankAgent {
             }
         }
 
+        explorationManager.stuckCounters.put(tank, stuckCounter);
+
         float padding = 30;
         float boundaryX = PApplet.constrain(tank.position.x, padding, parent.width - padding);
         float boundaryY = PApplet.constrain(tank.position.y, padding, parent.height - padding);
 
-        if (explorationManager.isValidNodePosition(tank.position)) {
+        if (explorationManager.isValidNodePosition(tank.position, tank)) {
             explorationManager.addNode(boundaryX, boundaryY);
         }
     }
 
     void toggleAutoExplore() {
+        // This now toggles auto-explore for all tanks
         explorationManager.toggleAutoExplore();
     }
 
@@ -128,12 +144,11 @@ public class TankAgent {
     }
 
     void returnHome() {
-        explorationManager.returnHome();
+        explorationManager.returnHome(tank);
     }
 
-    void display() {
-        explorationManager.display();
-    }
+    // No need for a separate display method, as the exploration manager
+    // will handle displaying for all tanks
 
     float getExplorationPercent() {
         return explorationManager.exploredPercent;

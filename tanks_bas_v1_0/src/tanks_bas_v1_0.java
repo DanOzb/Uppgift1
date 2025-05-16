@@ -10,7 +10,6 @@ public class tanks_bas_v1_0 extends PApplet{
 // Variabelnamn har satts för att försöka överensstämma med exempelkoden.
 // Klassen Tank är minimal och skickas mer med som koncept(anrop/states/vektorer).
 
-  ExplorationManager explorationManager;
   Collisions collisions;
   boolean left, right, up, down;
   boolean mouse_pressed;
@@ -112,6 +111,7 @@ public class tanks_bas_v1_0 extends PApplet{
     collisions = new Collisions(this);
     collisions.setTrees(allTrees);
 
+    // Create teams with shared exploration managers
     team0 = new Team(this, team0Color, new PVector(0, 0), new PVector(150, 350));
     team1 = new Team(this, team1Color, new PVector(width - 151, height - 351), new PVector(150, 350));
 
@@ -122,8 +122,6 @@ public class tanks_bas_v1_0 extends PApplet{
     tankAgent0 = team0.agents.get(0);
 
     team0.setupCollisionHandlers(collisions);
-
-    explorationManager = tankAgent0.explorationManager;
   }
   /**
    * Main game loop function.
@@ -140,20 +138,17 @@ public class tanks_bas_v1_0 extends PApplet{
       // CHECK FOR COLLISIONS
       checkForCollisions();
 
-      // CHANGED: Use team's exploration percent instead
       if (team0.getExplorationPercent() >= 80) {
         gameOver = true;
       } else {
-        // CHANGED: Update via team instead of directly
+        // Update the team, which now updates the shared exploration manager
         team0.update();
       }
     }
 
     // UPDATE DISPLAY
-    // CHANGED: Let team handle its base display
     team0.displayHomeBase();
     displayTrees();
-    // CHANGED: Use team display
     team0.display();
     displayTanks();
     displayGUI();
@@ -209,23 +204,6 @@ public class tanks_bas_v1_0 extends PApplet{
    */
   void checkForCollisions() {
     collisions.checkAllCollisions(allTanks, allTrees);
-  }
-
-
-
-  /**
-   * Displays the home bases for both teams.
-   * Draws rectangles with team colors at the appropriate locations.
-   */
-  // Följande bör ligga i klassen Team
-  void displayHomeBase() {
-    strokeWeight(1);
-
-    fill(team0Color, 15);    // Base Team 0(red)
-    rect(0, 0, 150, 350);
-
-    fill(team1Color, 15);    // Base Team 1(blue)
-    rect(width - 151, height - 351, 150, 350);
   }
 
   /**
@@ -309,7 +287,7 @@ public class tanks_bas_v1_0 extends PApplet{
       }
     }
 
-    if (key == 'p') {
+    if (key == 'p' || key == 'P') {
       pause = !pause;
     }
 
@@ -323,9 +301,8 @@ public class tanks_bas_v1_0 extends PApplet{
 
     if(key == 'd' || key == 'D'){
       tankAgent0.setPathfindingAlgorithm("Dijkstra");
-      tankAgent0.returnHome();
+      team0.returnAllHome();
     }
-
   }
 
   /**

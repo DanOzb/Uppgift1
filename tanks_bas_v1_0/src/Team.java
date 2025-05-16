@@ -9,6 +9,9 @@ class Team {
     PVector basePosition;
     PVector baseSize;
 
+    // Shared exploration manager for all tanks in the team
+    ExplorationManager explorationManager;
+
     Team(PApplet parent, int color, PVector basePos, PVector baseSize) {
         this.parent = parent;
         this.agents = new ArrayList<>();
@@ -16,11 +19,16 @@ class Team {
         this.teamColor = color;
         this.basePosition = basePos;
         this.baseSize = baseSize;
+
+        // Create a single exploration manager for the team
+        this.explorationManager = new ExplorationManager(parent, 100.0f);
+        this.explorationManager.initializeFog();
     }
 
     void addTank(Tank tank) {
         tanks.add(tank);
-        TankAgent agent = new TankAgent(parent, tank);
+        // Create TankAgent with the shared explorationManager
+        TankAgent agent = new TankAgent(parent, tank, explorationManager);
         agents.add(agent);
     }
 
@@ -31,33 +39,27 @@ class Team {
     }
 
     void update() {
-        // Update all agents
+        // Update the shared exploration manager for all tanks
+        explorationManager.updateTankPositions();
+        explorationManager.navigation();
+
+        // Still call update on each agent for any agent-specific logic
         for (TankAgent agent : agents) {
             agent.update();
         }
     }
 
     void toggleAutoExplore() {
-        for (TankAgent agent : agents) {
-            agent.toggleAutoExplore();
-        }
+        // Now this toggles auto-explore for all tanks at once
+        explorationManager.toggleAutoExplore();
     }
 
     void returnAllHome() {
-        for (TankAgent agent : agents) {
-            agent.returnHome();
-        }
+        explorationManager.returnAllHome();
     }
 
     float getExplorationPercent() {
-        float maxPercent = 0;
-        for (TankAgent agent : agents) {
-            float percent = agent.getExplorationPercent();
-            if (percent > maxPercent) {
-                maxPercent = percent;
-            }
-        }
-        return maxPercent;
+        return explorationManager.exploredPercent;
     }
 
     void displayHomeBase() {
@@ -69,9 +71,7 @@ class Team {
     void display() {
         displayHomeBase();
 
-        // Display all agents' exploration info
-        for (TankAgent agent : agents) {
-            agent.display();
-        }
+        // Display the shared exploration graph
+        explorationManager.display();
     }
 }

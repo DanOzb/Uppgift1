@@ -1,13 +1,11 @@
 import processing.core.*;
-
 import java.util.*;
 
 /**
- * Manages the exploration behavior and fog of war for a tank.
+ * Manages the exploration behavior and fog of war for multiple tanks.
  * This class handles automatic exploration, path finding, node management,
  * and fog of war visualization.
  */
-
 class ExplorationManager {
     PApplet parent;
 
@@ -19,26 +17,27 @@ class ExplorationManager {
 
     ArrayList<Node> nodes;
     ArrayList<Edge> edges;
-    Node currentNode;
-    Node targetNode;
-    Node baseNode; //to return home
-    ArrayList<PVector> path;
+    HashMap<Tank, Node> currentNodes; // Track current node for each tank
+    HashMap<Tank, Node> targetNodes;  // Track target node for each tank
+    Node baseNode; // to return home
+    HashMap<Tank, ArrayList<PVector>> paths; // Track path for each tank
     Random random;
 
-    Tank tank;
+    List<Tank> tanks;
     boolean autoExplore;
     float visibilityRadius;
     float minNodeDistance;
     float maxNodeDistance;
-    PVector previousDirection;
-    int stuckCounter;
-    PVector lastPosition;
-    int samePositionCounter;
+    HashMap<Tank, PVector> previousDirections;
+    HashMap<Tank, Integer> stuckCounters;
+    HashMap<Tank, PVector> lastPositions;
+    HashMap<Tank, Integer> samePositionCounters;
+    HashMap<Tank, NavigationState> navStates;
 
     int clearedPixels;
     int totalPixels;
     float exploredPercent;
-    int startPositionCounter;
+    HashMap<Tank, Integer> startPositionCounters;
 
     boolean testDijkstra;
 
@@ -48,9 +47,6 @@ class ExplorationManager {
         BACKTRACKING,
         RETURNING_HOME
     }
-
-    NavigationState navState;
-
 
     /**
      * Creates a new ExplorationManager with the specified visibility radius.
@@ -69,39 +65,96 @@ class ExplorationManager {
 
         this.nodes = new ArrayList<Node>();
         this.edges = new ArrayList<Edge>();
-        this.path = new ArrayList<PVector>();
+        this.tanks = new ArrayList<Tank>();
+        this.currentNodes = new HashMap<Tank, Node>();
+        this.targetNodes = new HashMap<Tank, Node>();
+        this.paths = new HashMap<Tank, ArrayList<PVector>>();
         this.random = new Random();
         this.autoExplore = false;
         this.minNodeDistance = 50;
         this.maxNodeDistance = 150;
-        this.previousDirection = new PVector(0, 0);
-        this.stuckCounter = 0;
-        this.samePositionCounter = 0;
-        this.navState = NavigationState.EXPLORING;
+
+        this.previousDirections = new HashMap<Tank, PVector>();
+        this.stuckCounters = new HashMap<Tank, Integer>();
+        this.lastPositions = new HashMap<Tank, PVector>();
+        this.samePositionCounters = new HashMap<Tank, Integer>();
+        this.navStates = new HashMap<Tank, NavigationState>();
+        this.startPositionCounters = new HashMap<Tank, Integer>();
 
         this.testDijkstra = false;
+
+        initializeFog();
     }
 
     /**
-     * Sets the tank controlled by this exploration manager.
-     * Creates a starting node at the tank's position.
+     * Adds a tank to be managed by this exploration manager.
+     * Creates a starting node at the tank's position if needed.
      *
-     * @param tank The tank to be controlled by this manager
+     * @param tank The tank to be added to this manager
      */
-
-    void setTank(Tank tank) {
-        this.tank = tank;
-
-        if (tank != null) {
-            Node startNode = new Node(parent, tank.position.x, tank.position.y);
-            nodes.add(startNode);
-            currentNode = startNode;
-            baseNode = startNode;
-            lastPosition = tank.position.copy();
-
-            visitedPositions.add(tank.position.copy());
+    void addTank(Tank tank) {
+        if (tank == null || tanks.contains(tank)) {
+            return;
         }
+
+        tanks.add(tank);
+
+        // Initialize all the maps for this tank
+        previousDirections.put(tank, new PVector(0, 0));
+        stuckCounters.put(tank, 0);
+        lastPositions.put(tank, tank.position.copy());
+        samePositionCounters.put(tank, 0);
+        navStates.put(tank, NavigationState.EXPLORING);
+        startPositionCounters.put(tank, 0);
+        paths.put(tank, new ArrayList<PVector>());
+
+        // Create a node at tank's position if needed
+        Node startNode = null;
+        for (Node existingNode : nodes) {
+            if (PVector.dist(existingNode.position, tank.position) < minNodeDistance) {
+                startNode = existingNode;
+                break;
+            }
+        }
+
+        if (startNode == null) {
+            startNode = new Node(parent, tank.position.x, tank.position.y);
+            nodes.add(startNode);
+        }
+
+        currentNodes.put(tank, startNode);
+
+        // Initialize base node for the first tank (assumes tanks of same team start at similar positions)
+        if (baseNode == null) {
+            baseNode = startNode;
+        }
+
+        // Add to visited positions
+        visitedPositions.add(tank.position.copy());
     }
+
+    /**
+     * Removes a tank from being managed by this exploration manager.
+     *
+     * @param tank The tank to remove
+     */
+    void removeTank(Tank tank) {
+        if (!tanks.contains(tank)) {
+            return;
+        }
+
+        tanks.remove(tank);
+        currentNodes.remove(tank);
+        targetNodes.remove(tank);
+        previousDirections.remove(tank);
+        stuckCounters.remove(tank);
+        lastPositions.remove(tank);
+        samePositionCounters.remove(tank);
+        navStates.remove(tank);
+        startPositionCounters.remove(tank);
+        paths.remove(tank);
+    }
+
     /**
      * Initializes the fog of war layer.
      * Creates a graphic layer for the fog and sets it to fully opaque.
@@ -118,24 +171,41 @@ class ExplorationManager {
             clearedPixels = 0;
         }
     }
+
     /**
-     * Updates the tank's position in the exploration graph.
+     * Updates the positions of all tanks in the exploration graph.
+     * Detects if tanks are stuck, adds visited positions for fog clearing,
+     * and creates new nodes when in unexplored territory.
+     */
+    void updateTankPositions() {
+        for (Tank tank : tanks) {
+            updateTankPosition(tank);
+        }
+    }
+
+    /**
+     * Updates a specific tank's position in the exploration graph.
      * Detects if the tank is stuck, adds visited positions for fog clearing,
      * and creates new nodes when in unexplored territory.
      */
-    void updateTankPosition() {
+    private void updateTankPosition(Tank tank) {
         if (tank == null) return;
+
+        PVector lastPosition = lastPositions.get(tank);
+        int samePositionCounter = samePositionCounters.get(tank);
 
         if (PVector.dist(tank.position, lastPosition) < 1.0f) {
             samePositionCounter++;
             if (samePositionCounter > 60) {
-                handleStuckTank();
+                handleStuckTank(tank);
                 samePositionCounter = 0;
             }
         } else {
             samePositionCounter = 0;
-            lastPosition = tank.position.copy();
+            lastPositions.put(tank, tank.position.copy());
         }
+
+        samePositionCounters.put(tank, samePositionCounter);
 
         PVector currentPos = tank.position.copy();
         boolean alreadyVisited = false;
@@ -154,7 +224,7 @@ class ExplorationManager {
 
         Node closestNode = findClosestNode(tank.position);
         if (closestNode != null && PVector.dist(closestNode.position, tank.position) < 20) {
-            currentNode = closestNode;
+            currentNodes.put(tank, closestNode);
         }
 
         if (findClosestNode(tank.position) == null ||
@@ -162,12 +232,13 @@ class ExplorationManager {
             addNode(tank.position.x, tank.position.y);
         }
     }
+
     /**
      * Handles a tank that appears to be stuck in one position.
      * Changes direction randomly to attempt to escape the stuck position.
      */
-    void handleStuckTank() { //TODO: skapar den här problem?
-        parent.println("Tank appears stuck - changing direction");
+    void handleStuckTank(Tank tank) {
+        parent.println(tank.name + " appears stuck - changing direction");
 
         float randomAngle = random.nextFloat() * PApplet.TWO_PI;
         PVector escapeDirection = new PVector(PApplet.cos(randomAngle), PApplet.sin(randomAngle));
@@ -178,11 +249,12 @@ class ExplorationManager {
             tank.state = escapeDirection.y > 0 ? 3 : 4;
         }
 
-        if (targetNode != null) {
-            navState = NavigationState.EXPLORING;
-            targetNode = null;
+        if (targetNodes.containsKey(tank) && targetNodes.get(tank) != null) {
+            navStates.put(tank, NavigationState.EXPLORING);
+            targetNodes.put(tank, null);
         }
     }
+
     /**
      * Finds the closest node to a given position.
      *
@@ -205,6 +277,7 @@ class ExplorationManager {
 
         return closest;
     }
+
     /**
      * Adds a new node at the specified coordinates to the exploration graph.
      * Attempts to connect the new node to nearby nodes if possible.
@@ -213,16 +286,28 @@ class ExplorationManager {
      * @param y Y-coordinate for the new node
      * @return The newly created Node
      */
-    Node addNode(float x, float y) { //TODO: borde användas överallt, och aldrig direkt till nodklassen
+    Node addNode(float x, float y) {
+        // Check if a node already exists nearby
+        for (Node existingNode : nodes) {
+            if (PVector.dist(existingNode.position, new PVector(x, y)) < minNodeDistance) {
+                return existingNode;
+            }
+        }
+
         Node newNode = new Node(parent, x, y);
         nodes.add(newNode);
         connectToVisibleNodes(newNode);
-        if (PVector.dist(newNode.position, tank.position) < 30) {
-            currentNode = newNode;
+
+        // Update current nodes for tanks that are close to this new node
+        for (Tank tank : tanks) {
+            if (PVector.dist(newNode.position, tank.position) < 30) {
+                currentNodes.put(tank, newNode);
+            }
         }
 
         return newNode;
     }
+
     /**
      * Attempts to connect a node to all visible nearby nodes.
      * A connection is made if the nodes are within range and have line of sight.
@@ -238,6 +323,7 @@ class ExplorationManager {
             }
         }
     }
+
     /**
      * Checks if there is line of sight between two positions.
      * Uses the collision system to check for obstacles.
@@ -264,6 +350,7 @@ class ExplorationManager {
         }
         return true;
     }
+
     /**
      * Creates a bidirectional connection between two nodes with a specified weight.
      *
@@ -277,6 +364,7 @@ class ExplorationManager {
         node1.addEdge(node2, weight);
         node2.addEdge(node1, weight);
     }
+
     /**
      * Checks if auto-exploration mode is currently active.
      *
@@ -285,32 +373,55 @@ class ExplorationManager {
     public boolean isAutoExploreActive() {
         return autoExplore;
     }
+
     /**
-     * Toggles the auto-exploration mode on or off.
-     * When enabled, the tank will automatically explore the environment.
-     * When disabled, the tank will stop moving.
+     * Toggles the auto-exploration mode on or off for all tanks.
+     * When enabled, tanks will automatically explore the environment.
+     * When disabled, tanks will stop moving.
      */
     void toggleAutoExplore() {
         autoExplore = !autoExplore;
         if (autoExplore) {
             parent.println("Auto-exploration enabled");
-            navState = NavigationState.EXPLORING;
+            for (Tank tank : tanks) {
+                navStates.put(tank, NavigationState.EXPLORING);
+            }
         } else {
             parent.println("Auto-exploration disabled");
-            tank.state = 0;
+            for (Tank tank : tanks) {
+                tank.state = 0;
+            }
         }
     }
+
     /**
-     * Main navigation method that controls the tank's movement.
-     * Handles different navigation states: exploring, moving to target,
+     * Main navigation method that controls all tanks' movement.
+     * Handles different navigation states for each tank: exploring, moving to target,
      * backtracking, and returning home.
      */
     void navigation() {
-        if (!autoExplore || tank == null) return;
+        if (!autoExplore) return;
+
+        for (Tank tank : tanks) {
+            navigateTank(tank);
+        }
+    }
+
+    /**
+     * Handles navigation for a specific tank.
+     */
+    private void navigateTank(Tank tank) {
+        if (tank == null) return;
+
+        NavigationState navState = navStates.get(tank);
 
         switch (navState) {
             case RETURNING_HOME:
                 tank.navState = "ReturningHome";
+                Node targetNode = targetNodes.get(tank);
+                ArrayList<PVector> path = paths.get(tank);
+                int startPositionCounter = startPositionCounters.get(tank);
+
                 if (targetNode != null && PVector.dist(tank.position, targetNode.position) < 20) {
                     if (!path.isEmpty()) {
                         path.remove(0);
@@ -319,57 +430,75 @@ class ExplorationManager {
                         PVector nextPos = path.get(0);
                         Node nextNode = findClosestNode(nextPos);
                         if (nextNode != null) {
-                            targetNode = nextNode;
+                            targetNodes.put(tank, nextNode);
                         }
                     }
                 }
 
                 if (targetNode != null) {
-                    moveTowardTarget();
+                    moveTowardTarget(tank);
                 }
 
                 if (PVector.dist(tank.position, baseNode.position) < 10) {
                     tank.state = 0;
                     startPositionCounter++;
                     if(startPositionCounter >= 180){
-                        System.out.println("should be home here");
-                        navState = NavigationState.EXPLORING;
+                        System.out.println(tank.name + " should be home here");
+                        navStates.put(tank, NavigationState.EXPLORING);
                         startPositionCounter = 0;
                     }
                 }
+
+                startPositionCounters.put(tank, startPositionCounter);
                 break;
+
             case EXPLORING:
                 tank.navState = "Exploring";
+                targetNode = targetNodes.get(tank);
+
                 if (targetNode == null || PVector.dist(tank.position, targetNode.position) < 20) {
-                    targetNode = selectExplorationTarget();
+                    targetNode = selectExplorationTarget(tank);
                     if (targetNode != null) {
-                        navState = NavigationState.MOVING_TO_TARGET;
+                        navStates.put(tank, NavigationState.MOVING_TO_TARGET);
+                        targetNodes.put(tank, targetNode);
                     } else {
-                        expandRRT();
+                        expandRRT(tank);
                     }
                 }
                 break;
 
             case MOVING_TO_TARGET:
                 tank.navState = "MovingToTarget";
-                moveTowardTarget();
+                moveTowardTarget(tank);
+                targetNode = targetNodes.get(tank);
+
+                if (targetNode != null && PVector.dist(tank.position, targetNode.position) < 50 && navState != NavigationState.RETURNING_HOME) {
+                    targetNode.markVisited();
+                    navStates.put(tank, NavigationState.EXPLORING);
+                    targetNodes.put(tank, null);
+                }
                 break;
 
             case BACKTRACKING:
                 tank.navState = "Backtracking";
+                Node currentNode = currentNodes.get(tank);
+                targetNode = targetNodes.get(tank);
+
                 if (currentNode != null && targetNode != null) {
-                    moveTowardTarget();
+                    moveTowardTarget(tank);
                 } else {
-                    navState = NavigationState.EXPLORING;
+                    navStates.put(tank, NavigationState.EXPLORING);
                 }
                 break;
         }
     }
+
     /**
-     * Moves the tank toward the current target node.
+     * Moves a tank toward its current target node.
      * Sets the tank's state (direction) based on the direction to the target.
      */
-    void moveTowardTarget() {
+    void moveTowardTarget(Tank tank) {
+        Node targetNode = targetNodes.get(tank);
         if (targetNode == null) return;
 
         PVector direction = PVector.sub(targetNode.position, tank.position);
@@ -396,33 +525,32 @@ class ExplorationManager {
             }
         }
 
-        previousDirection = direction.copy();
-
-        if (PVector.dist(tank.position, targetNode.position) < 50 && navState != NavigationState.RETURNING_HOME) {
-            targetNode.markVisited();
-            navState = NavigationState.EXPLORING;
-            targetNode = null;
-        }
+        previousDirections.put(tank, direction.copy());
     }
+
     /**
-     * Selects the next target node for exploration.
+     * Selects the next target node for a tank's exploration.
      * Prioritizes unvisited nodes that are visible and not in the home base.
+     * Also avoids nodes near other tanks to prevent tanks from crossing paths.
      *
+     * @param tank The tank to select an exploration target for
      * @return The selected node for exploration, or null if no suitable node was found
      */
-    Node selectExplorationTarget() {
+    Node selectExplorationTarget(Tank tank) {
         ArrayList<Node> candidates = new ArrayList<Node>();
 
         for (Node node : nodes) {
             if (!node.visited &&
                     PVector.dist(node.position, tank.position) < maxNodeDistance * 3 &&
                     canSee(tank.position, node.position) &&
-                    !isInHomeBase(node.position)) {
+                    !isInHomeBase(node.position) &&
+                    !isNearOtherTank(node.position, tank)) {
                 candidates.add(node);
             }
         }
 
         if (!candidates.isEmpty()) {
+            // Find the closest candidate
             Node closest = null;
             float minDist = Float.MAX_VALUE;
 
@@ -438,18 +566,49 @@ class ExplorationManager {
         }
         return null;
     }
+
+    /**
+     * Checks if a position is too close to other tanks.
+     * Used to prevent tanks from selecting targets that would cause them to cross paths.
+     *
+     * @param position Position to check
+     * @param excludeTank Tank to exclude from the check
+     * @return true if the position is too close to another tank
+     */
+    boolean isNearOtherTank(PVector position, Tank excludeTank) {
+        float minDistance = 75.0f; // Minimum distance to keep between tanks
+
+        for (Tank otherTank : tanks) {
+            if (otherTank != excludeTank) {
+                // Check distance to other tank
+                if (PVector.dist(position, otherTank.position) < minDistance) {
+                    return true;
+                }
+
+                // Also check if position is close to other tank's target
+                Node otherTargetNode = targetNodes.get(otherTank);
+                if (otherTargetNode != null &&
+                        PVector.dist(position, otherTargetNode.position) < minDistance) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
     /**
      * Expands the exploration graph using Rapidly-exploring Random Tree (RRT) algorithm.
      * Creates new nodes in unexplored areas to guide exploration when no valid targets exist.
      */
-    void expandRRT() {
+    void expandRRT(Tank tank) {
         for (int attempts = 0; attempts < 10; attempts++) {
             PVector randomPoint = new PVector(
                     random.nextFloat() * parent.width,
                     random.nextFloat() * parent.height
             );
 
-            if (isInHomeBase(randomPoint)) {
+            if (isInHomeBase(randomPoint) || isNearOtherTank(randomPoint, tank)) {
                 continue;
             }
 
@@ -465,24 +624,26 @@ class ExplorationManager {
             newPos.x = PApplet.constrain(newPos.x, 20, parent.width - 20);
             newPos.y = PApplet.constrain(newPos.y, 20, parent.height - 20);
 
-            if (isValidNodePosition(newPos)) {
+            if (isValidNodePosition(newPos, tank)) {
                 Node newNode = addNode(newPos.x, newPos.y);
-                targetNode = newNode;
-                navState = NavigationState.MOVING_TO_TARGET;
+                targetNodes.put(tank, newNode);
+                navStates.put(tank, NavigationState.MOVING_TO_TARGET);
                 return;
             }
         }
     }
+
     /**
      * Checks if a position is valid for creating a new node.
      * Validates that the position is not in a home base, not too close to existing nodes,
-     * and not colliding with obstacles.
+     * not too close to other tanks, and not colliding with obstacles.
      *
      * @param pos Position to validate
+     * @param excludeTank Tank to exclude from proximity checks
      * @return true if the position is valid for a new node, false otherwise
      */
-    boolean isValidNodePosition(PVector pos) {
-        if (isInHomeBase(pos)) {
+    boolean isValidNodePosition(PVector pos, Tank excludeTank) {
+        if (isInHomeBase(pos) || isNearOtherTank(pos, excludeTank)) {
             return false;
         }
 
@@ -496,10 +657,10 @@ class ExplorationManager {
             tanks_bas_v1_0 game = (tanks_bas_v1_0) parent;
             if (game.allTrees != null) {
                 for (Tree tree : game.allTrees) {
-                    if(lineIntersectsTree(tank.position, pos, tree.position, tree.radius)){
-                        return false;
-                    }
                     if (tree != null) {
+                        if (lineIntersectsTree(excludeTank.position, pos, tree.position, tree.radius)) {
+                            return false;
+                        }
                         float dist = PVector.dist(pos, tree.position);
                         if (dist < tree.radius + 60) {
                             return false;
@@ -510,15 +671,10 @@ class ExplorationManager {
         }
         return true;
     }
+
     /**
      * Checks if a line between two points intersects with a tree.
-     * Delegates to the Collisions class if available, otherwise performs the check directly.
-     *
-     * @param start Starting point of the line
-     * @param end Ending point of the line
-     * @param center Center of the tree
-     * @param radius Radius of the tree
-     * @return true if the line intersects with the tree, false otherwise
+     * Used for line-of-sight and path planning calculations.
      */
     boolean lineIntersectsTree(PVector start, PVector end, PVector center, float radius) {
         // Direct implementation instead of calling collisions
@@ -540,9 +696,9 @@ class ExplorationManager {
             return (t1 >= 0 && t1 <= 1) || (t2 >= 0 && t2 <= 1);
         }
     }
+
     /**
      * Checks if a position is inside a home base.
-     * Delegates to the Collisions class if available.
      *
      * @param position Position to check
      * @return true if the position is in a home base, false otherwise
@@ -560,6 +716,7 @@ class ExplorationManager {
 
         return false;
     }
+
     /**
      * Updates the fog of war based on visited positions.
      * Calculates the percentage of the map that has been explored.
@@ -574,12 +731,24 @@ class ExplorationManager {
         fogLayer.noStroke();
 
         for (PVector pos : visitedPositions) {
-            float diameter = tank != null ? tank.fieldOfView : 100.0f;
+            float diameter = 100.0f; // Default FOV
+            // Find if any tank is near this position for FOV
+            for (Tank tank : tanks) {
+                if (PVector.dist(tank.position, pos) < 30) {
+                    diameter = tank.fieldOfView;
+                    break;
+                }
+            }
+
             fogLayer.fill(fogColor, 0);
             fogLayer.ellipse(pos.x, pos.y, diameter, diameter);
         }
-        clearedPixels = 0;
 
+        fogLayer.endDraw();
+
+        // Count cleared pixels
+        fogLayer.loadPixels();
+        clearedPixels = 0;
         for (int i = 0; i < totalPixels; i++) {
             int c = fogLayer.pixels[i];
             float alpha = parent.alpha(c);
@@ -588,19 +757,32 @@ class ExplorationManager {
             }
         }
 
-        fogLayer.blendMode(PApplet.BLEND);
-        fogLayer.endDraw();
         exploredPercent = (clearedPixels / (float) totalPixels) * 100;
     }
+
     /**
      * Displays the exploration graph and fog of war.
      * Shows nodes, connections, and the exploration percentage.
      */
     void display() {
+        // Display nodes
         for (Node node : nodes) {
-            if (node == currentNode) {
+            boolean isCurrentNode = false;
+            boolean isTargetNode = false;
+
+            // Check if this node is a current or target node for any tank
+            for (Tank tank : tanks) {
+                if (currentNodes.containsKey(tank) && node == currentNodes.get(tank)) {
+                    isCurrentNode = true;
+                }
+                if (targetNodes.containsKey(tank) && node == targetNodes.get(tank)) {
+                    isTargetNode = true;
+                }
+            }
+
+            if (isCurrentNode) {
                 parent.fill(0, 200, 0);
-            } else if (node == targetNode) {
+            } else if (isTargetNode) {
                 parent.fill(200, 200, 0);
             } else if (node.visited) {
                 parent.fill(150, 150, 200, 150);
@@ -611,6 +793,8 @@ class ExplorationManager {
             parent.noStroke();
             parent.ellipse(node.position.x, node.position.y, 15, 15);
         }
+
+        // Display edges
         parent.stroke(100, 100, 200, 100);
         parent.strokeWeight(1);
         for (Edge edge : edges) {
@@ -621,49 +805,64 @@ class ExplorationManager {
         }
         parent.strokeWeight(1);
 
+        // Display fog of war
         if (initialized) {
             parent.image(fogLayer, 0, 0);
         }
+
+        // Display exploration percentage
         parent.fill(0);
         parent.text(parent.nf(exploredPercent, 1, 2) + "% explored", 20, 20);
     }
 
     /**
-     * Initiates the return home sequence.
+     * Initiates the return home sequence for a tank.
      * Calculates a path back to the home base node using A* pathfinding.
      */
-    void returnHome() {
-        navState = NavigationState.RETURNING_HOME;
+    void returnHome(Tank tank) {
+        navStates.put(tank, NavigationState.RETURNING_HOME);
 
         Node closestNode = findClosestNode(tank.position);
 
         if (closestNode == null || PVector.dist(closestNode.position, tank.position) > minNodeDistance) {
             closestNode = addNode(tank.position.x, tank.position.y);
         }
-        currentNode = closestNode;
-
+        currentNodes.put(tank, closestNode);
 
         ArrayList<Node> pathingHome;
 
-        if(testDijkstra)
+        if (testDijkstra)
             pathingHome = dijkstra(closestNode, baseNode);
         else
             pathingHome = aStar(closestNode, baseNode);
 
+        ArrayList<PVector> path = new ArrayList<>();
         if (!pathingHome.isEmpty()) {
             path.clear();
-        }
 
-        for (Node node : pathingHome) {
-            path.add(node.position.copy());
-        }
+            for (Node node : pathingHome) {
+                path.add(node.position.copy());
+            }
 
-        if (pathingHome.size() > 1) {
-            targetNode = pathingHome.get(0); //TODO: bandaid kanske ändra case till 1?
-        } else {
-            targetNode = baseNode;
+            paths.put(tank, path);
+
+            if (pathingHome.size() > 1) {
+                targetNodes.put(tank, pathingHome.get(0));
+            } else {
+                targetNodes.put(tank, baseNode);
+            }
         }
     }
+
+    /**
+     * Initiates the return home sequence for all tanks.
+     */
+    void returnAllHome() {
+        for (Tank tank : tanks) {
+            returnHome(tank);
+        }
+    }
+
     /**
      * Implements Dijkstra's algorithm to find the shortest path between start and goal nodes.
      *
@@ -691,7 +890,7 @@ class ExplorationManager {
             Node current = openSet.poll();
 
             if (current.equals(goal)) {
-                return reconstructPAth(traveledFrom,current);
+                return reconstructPath(traveledFrom,current);
             }
 
             visitedNodes.add(current);
@@ -748,7 +947,7 @@ class ExplorationManager {
             Node current = openSet.poll();
 
             if (current.equals(goal)) {
-                return reconstructPAth(traveledFrom,current);
+                return reconstructPath(traveledFrom,current);
             }
 
             visitedNodes.add(current);
@@ -782,7 +981,7 @@ class ExplorationManager {
      * @param current Current node to reconstruct the path from
      * @return List of nodes representing the path
      */
-    private ArrayList<Node> reconstructPAth(HashMap<Node,Node> traveledFrom, Node current) {
+    private ArrayList<Node> reconstructPath(HashMap<Node,Node> traveledFrom, Node current) {
         ArrayList<Node> path = new ArrayList<>();
 
         path.add(current);
@@ -805,17 +1004,13 @@ class ExplorationManager {
         return PVector.dist(a.position, b.position);
     }
     /**
-     * Checks if the tank is currently in the process of returning home.
+     * Checks if a specific tank is currently in the process of returning home.
      *
+     * @param tank The tank to check
      * @return true if the tank is returning home, false otherwise
      */
-    public boolean isReturningHome() {
-        return navState == NavigationState.RETURNING_HOME;
-    }
-    /**
-     * Test method to trigger the return home behavior.
-     */
-    void testReturnHome() {
-        returnHome();
+    public boolean isReturningHome(Tank tank) {
+        NavigationState state = navStates.get(tank);
+        return state == NavigationState.RETURNING_HOME;
     }
 }
