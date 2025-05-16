@@ -41,11 +41,14 @@ class ExplorationManager {
 
     boolean testDijkstra;
 
+    ArrayList<PVector> pathToEnemyBase;
+
     enum NavigationState {
         EXPLORING,
         MOVING_TO_TARGET,
         BACKTRACKING,
-        RETURNING_HOME
+        RETURNING_HOME,
+        POSITION_AROUND_ENEMY_BASE
     }
 
     /**
@@ -249,7 +252,8 @@ class ExplorationManager {
             tank.state = escapeDirection.y > 0 ? 3 : 4;
         }
 
-        if (targetNodes.containsKey(tank) && targetNodes.get(tank) != null) {
+        if (targetNodes.containsKey(tank) && targetNodes.get(tank) != null || navStates.get(tank) == NavigationState.RETURNING_HOME) { //TODO: bandaid
+            System.out.println("HAS SEEN A TREE THEREFORE TURNED INTO EXPLORING");
             navStates.put(tank, NavigationState.EXPLORING);
             targetNodes.put(tank, null);
         }
@@ -420,8 +424,11 @@ class ExplorationManager {
                 tank.navState = "ReturningHome";
                 Node targetNode = targetNodes.get(tank);
                 ArrayList<PVector> path = paths.get(tank);
-                int startPositionCounter = startPositionCounters.get(tank);
 
+
+
+
+                int startPositionCounter = startPositionCounters.get(tank);
                 if (targetNode != null && PVector.dist(tank.position, targetNode.position) < 20) {
                     if (!path.isEmpty()) {
                         path.remove(0);
@@ -439,14 +446,8 @@ class ExplorationManager {
                     moveTowardTarget(tank);
                 }
 
-                if (PVector.dist(tank.position, baseNode.position) < 10) {
-                    tank.state = 0;
-                    startPositionCounter++;
-                    if(startPositionCounter >= 180){
-                        System.out.println(tank.name + " should be home here");
-                        navStates.put(tank, NavigationState.EXPLORING);
-                        startPositionCounter = 0;
-                    }
+                if (areAllTanksHome()) {
+                    navStates.put(tank, NavigationState.POSITION_AROUND_ENEMY_BASE);
                 }
 
                 startPositionCounters.put(tank, startPositionCounter);
@@ -472,7 +473,7 @@ class ExplorationManager {
                 moveTowardTarget(tank);
                 targetNode = targetNodes.get(tank);
 
-                if (targetNode != null && PVector.dist(tank.position, targetNode.position) < 50 && navState != NavigationState.RETURNING_HOME) {
+                if (targetNode != null && PVector.dist(tank.position, targetNode.position) < 50) {
                     targetNode.markVisited();
                     navStates.put(tank, NavigationState.EXPLORING);
                     targetNodes.put(tank, null);
@@ -489,6 +490,11 @@ class ExplorationManager {
                 } else {
                     navStates.put(tank, NavigationState.EXPLORING);
                 }
+                break;
+
+            case POSITION_AROUND_ENEMY_BASE:
+                //för varje position som rörts, ta bort ett element tills empty
+
                 break;
         }
     }
@@ -754,6 +760,13 @@ class ExplorationManager {
             float t2 = (-b + discriminant) / (2 * a);
             return (t1 >= 0 && t1 <= 1) || (t2 >= 0 && t2 <= 1);
         }
+    }
+
+    boolean areAllTanksHome(){
+        for(Tank tank : tanks) {
+            if(!isInHomeBase(tank.position)) return false;
+        }
+        return true;
     }
 
     /**

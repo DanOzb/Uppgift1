@@ -110,8 +110,11 @@ public class TankAgent {
                     break;
 
                 case BASE:
-                    // If we detect an enemy base, mark it
-                    // This could be used for strategic planning
+                    //ADD NODE
+                    //sätt nod till enemyBase/position
+
+                    //explorationManager.returnAllHome();
+                    //stäng av autoexploration (när alla är hemma (efter returnAllHome)
                     break;
 
                 case BORDER:
@@ -197,6 +200,10 @@ public class TankAgent {
 
         ExplorationManager.NavigationState navState = explorationManager.navStates.get(tank);
         Node targetNode = explorationManager.targetNodes.get(tank);
+
+        if (navState == ExplorationManager.NavigationState.RETURNING_HOME) {
+            return;
+        }
 
         if (navState == ExplorationManager.NavigationState.MOVING_TO_TARGET) {
             if (targetNode != null) {
