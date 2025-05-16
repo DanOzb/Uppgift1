@@ -5,29 +5,16 @@ import processing.core.*;
  * This class handles collisions between tanks, trees, base boundaries, and screen borders.
  */
 
-interface CollisionHandler {
-    void handleBorderCollision(Tank tank);
-    void handleTreeCollision(Tank tank, Tree tree);
-    boolean isReturningHome(Tank tank);
-    void handleEnemyBaseCollision(Tank tank);  // New method
-}
-
-class Collisions {
+public class Collisions {
     PApplet parent;
+    CollisionHandler collisionHandler;
     Tree[] trees;
-    private CollisionHandler collisionHandler;
 
-    /**
-     * Constructs a new Collisions manager.
-     *
-     * @param parent The Processing PApplet that this collision system belongs to
-     * @param explorationManager The exploration manager to notify about collisions
-     */
-
-    Collisions(PApplet parent) {
+    public Collisions(PApplet parent) {
         this.parent = parent;
         this.trees = null;
     }
+
     public void setCollisionHandler(CollisionHandler handler) {
         this.collisionHandler = handler;
     }
@@ -35,6 +22,7 @@ class Collisions {
     public void setTrees(Tree[] trees) {
         this.trees = trees;
     }
+
     public Tree[] getTrees() {
         return trees;
     }
@@ -47,7 +35,7 @@ class Collisions {
      * @param allTanks Array of Tank objects to check for collisions
      * @param allTrees Array of Tree objects to check for collisions with tanks
      */
-    void checkAllCollisions(Tank[] allTanks, Tree[] allTrees) {
+    public void checkAllCollisions(Tank[] allTanks, Tree[] allTrees) {
         for (Tank tank : allTanks) {
             if (tank != null) {
                 checkBaseCollisions(tank);
@@ -64,9 +52,13 @@ class Collisions {
             }
 
             boolean treeCollision = checkTreeCollisions(allTanks[i], allTrees);
+
+            // CHANGED: This part needs to use the collision handler instead of direct reference
             if (treeCollision && collisionHandler != null && !collisionHandler.isReturningHome(allTanks[i])) {
-                collisionHandler.handleTreeCollision(allTanks[i], null);
+                // Notify the handler about a persistent tree collision
+                collisionHandler.handleTreeCollision(allTanks[i], null);  // Pass null to indicate a persistent collision
             }
+
             checkBorderCollisions(allTanks[i]);
         }
     }
@@ -78,7 +70,7 @@ class Collisions {
      * @param tank Tank object to check for enemy base collision
      * @return true if in enemy base, otherwise false
      */
-    boolean isInEnemyBase(Tank tank) {
+    public boolean isInEnemyBase(Tank tank) {
         if (tank.col == parent.color(204, 50, 50)) {
             return (tank.position.x >= parent.width - 151 && tank.position.y >= parent.height - 351);
         }
@@ -95,7 +87,7 @@ class Collisions {
      *
      * @param tank Tank object to check for base collisions
      */
-    void checkBaseCollisions(Tank tank) {
+    public void checkBaseCollisions(Tank tank) {
 
         PVector positionIsEnemyBase = PVector.add(tank.position, tank.velocity);
         boolean collided = false;
@@ -153,7 +145,7 @@ class Collisions {
      * @param tank First tank in the collision
      * @param otherTank Second tank in the collision
      */
-    void checkTankCollision(Tank tank, Tank otherTank) {
+    public void checkTankCollision(Tank tank, Tank otherTank) {
         if (tank == otherTank) return;
 
         boolean sameTeam = tank.col == otherTank.col;
@@ -184,6 +176,7 @@ class Collisions {
                 distanceVect.normalize();
             }
 
+            // Push both tanks away from each other
             tank.position.x += distanceVect.x * overlap * 0.5f;
             tank.position.y += distanceVect.y * overlap * 0.5f;
             otherTank.position.x -= distanceVect.x * overlap * 0.5f;
@@ -208,7 +201,7 @@ class Collisions {
      * @return true if any tree collision was detected, false otherwise
      */
 
-    boolean checkTreeCollisions(Tank tank, Tree[] trees) {
+    public boolean checkTreeCollisions(Tank tank, Tree[] trees) {
         boolean collisionDetected = false;
 
         for (Tree tree : trees) {
@@ -240,7 +233,7 @@ class Collisions {
      * @return true if collision was detected, false otherwise
      */
 
-    boolean checkTreeCollision(Tank tank, Tree tree) {
+    public boolean checkTreeCollision(Tank tank, Tree tree) {
         PVector distanceVect = PVector.sub(tank.position, tree.position);
         float distanceVecMag = distanceVect.mag();
         float minDistance = tree.radius + tank.diameter/2;
@@ -275,7 +268,7 @@ class Collisions {
      * @param tank Tank to check for border collisions
      */
 
-    void checkBorderCollisions(Tank tank) {
+    public void checkBorderCollisions(Tank tank) {
         float r = tank.diameter / 2;
         boolean collision = false;
 
@@ -304,7 +297,8 @@ class Collisions {
         }
 
         if (collision) {
-            handleBorderCollision(tank); // Call the new method
+            // Instead of directly calling explManager methods, use the handler
+            handleBorderCollision(tank);
         }
     }
 
@@ -319,7 +313,7 @@ class Collisions {
      * @return true if the line intersects with the tree, false otherwise
      */
 
-    boolean lineIntersectsTree(PVector start, PVector end, PVector treeCenter, float treeRadius) {
+    public boolean lineIntersectsTree(PVector start, PVector end, PVector treeCenter, float treeRadius) {
         PVector d = PVector.sub(end, start);
         PVector f = PVector.sub(start, treeCenter);
 
@@ -336,6 +330,7 @@ class Collisions {
 
             float t1 = (-b - discriminant) / (2 * a);
             float t2 = (-b + discriminant) / (2 * a);
+
             return (t1 >= 0 && t1 <= 1) || (t2 >= 0 && t2 <= 1);
         }
     }
@@ -349,12 +344,15 @@ class Collisions {
      * @return true if there is clear visibility between points, false if obstructed
      */
 
-    boolean canSee(PVector from, PVector to) {
-        if (trees != null) {
-            for (Tree tree : trees) {
-                if (tree != null) {
-                    if (lineIntersectsTree(from, to, tree.position, tree.radius + 10)) {
-                        return false;
+    public boolean canSee(PVector from, PVector to) {
+        if (parent instanceof tanks_bas_v1_0) {
+            tanks_bas_v1_0 game = (tanks_bas_v1_0) parent;
+            if (game.allTrees != null) {
+                for (Tree tree : game.allTrees) {
+                    if (tree != null) {
+                        if (lineIntersectsTree(from, to, tree.position, tree.radius + 10)) {
+                            return false;
+                        }
                     }
                 }
             }
@@ -369,7 +367,7 @@ class Collisions {
      * @return true if position is in any home base, false otherwise
      */
 
-    boolean isInHomeBase(PVector position) {
+    public boolean isInHomeBase(PVector position) {
         if (position.x >= 0 && position.x <= 150 &&
                 position.y >= 0 && position.y <= 350) {
             return true;

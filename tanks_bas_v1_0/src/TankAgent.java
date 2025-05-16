@@ -1,38 +1,29 @@
-import processing.core.PApplet;
-import processing.core.PVector;
+import processing.core.*;
 
 public class TankAgent {
     PApplet parent;
     Tank tank;
     ExplorationManager explorationManager;
 
-    public void toggleAutoExplore() {
-        explorationManager.toggleAutoExplore();
-    }
-
-    public void returnHome() {
-        explorationManager.returnHome();
-    }
-
-    public void display() {
-        explorationManager.display();
-    }
-
     enum AgentState {
         EXPLORING,
-        MOVING_TO_TARGET,
-        BACKTRACKING,
+        ATTACKING,
+        DEFENDING,
         RETURNING_HOME
     }
 
     AgentState currentState;
 
+    // 2-argument constructor
     TankAgent(PApplet parent, Tank tank) {
         this.parent = parent;
         this.tank = tank;
+
+        // Create and initialize ExplorationManager
         this.explorationManager = new ExplorationManager(parent, 100.0f);
-        this.explorationManager.setTank(tank); //TODO: kanske ta till explorationManager
+        this.explorationManager.setTank(tank);
         this.explorationManager.initializeFog();
+
         this.currentState = AgentState.EXPLORING;
     }
 
@@ -41,7 +32,7 @@ public class TankAgent {
             @Override
             public void handleBorderCollision(Tank collidedTank) {
                 if (collidedTank == tank) {
-                    handleBorderCollision(tank);
+                    borderCollisionHandle();
                 }
             }
 
@@ -49,11 +40,7 @@ public class TankAgent {
             public void handleTreeCollision(Tank collidedTank, Tree tree) {
                 if (collidedTank == tank) {
                     if (tree == null) {
-                        // This is a persistent collision notification
                         explorationManager.samePositionCounter = 60;
-                    } else {
-                        // Regular tree collision handling
-                        handleTreeCollision(tank, tree);
                     }
                 }
             }
@@ -77,18 +64,13 @@ public class TankAgent {
     }
 
     void update() {
-        // Update based on agent state
-        if (currentState == AgentState.EXPLORING) {
-            explorationManager.updateTankPosition();
-            explorationManager.navigation();
-        } else if (currentState == AgentState.RETURNING_HOME) {
-            explorationManager.updateTankPosition();
-            explorationManager.navigation();
-        }
+        explorationManager.updateTankPosition();
+        explorationManager.navigation();
     }
 
-    void handleBorderCollision() {
+    void borderCollisionHandle() {
         parent.println("Border collision detected - adjusting navigation");
+
         if (explorationManager.navState == ExplorationManager.NavigationState.MOVING_TO_TARGET) {
             if (explorationManager.targetNode != null) {
                 explorationManager.stuckCounter++;
@@ -128,6 +110,31 @@ public class TankAgent {
             explorationManager.addNode(boundaryX, boundaryY);
         }
     }
+
+    void toggleAutoExplore() {
+        explorationManager.toggleAutoExplore();
+    }
+
+    boolean isAutoExploreActive() {
+        return explorationManager.isAutoExploreActive();
+    }
+
+    void setPathfindingAlgorithm(String algorithm) {
+        if (algorithm.equals("Dijkstra")) {
+            explorationManager.testDijkstra = true;
+        } else {
+            explorationManager.testDijkstra = false;
+        }
+    }
+
+    void returnHome() {
+        explorationManager.returnHome();
+    }
+
+    void display() {
+        explorationManager.display();
+    }
+
     float getExplorationPercent() {
         return explorationManager.exploredPercent;
     }

@@ -2,7 +2,6 @@ import processing.core.*;
 import java.util.ArrayList;
 
 class Team {
-    //ExplorationManager explorationManager;
     PApplet parent;
     ArrayList<TankAgent> agents;
     ArrayList<Tank> tanks;
@@ -50,6 +49,17 @@ class Team {
         }
     }
 
+    float getExplorationPercent() {
+        float maxPercent = 0;
+        for (TankAgent agent : agents) {
+            float percent = agent.getExplorationPercent();
+            if (percent > maxPercent) {
+                maxPercent = percent;
+            }
+        }
+        return maxPercent;
+    }
+
     void displayHomeBase() {
         parent.strokeWeight(1);
         parent.fill(teamColor, 15);
@@ -63,16 +73,5 @@ class Team {
         for (TankAgent agent : agents) {
             agent.display();
         }
-    }
-
-    float getExplorationPercent() {
-        float maxPercent = 0;
-        for (TankAgent agent : agents) {
-            float percent = agent.getExplorationPercent();
-            if (percent > maxPercent) {
-                maxPercent = percent;
-            }
-        }
-        return maxPercent;
     }
 }

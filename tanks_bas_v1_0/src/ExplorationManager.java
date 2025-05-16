@@ -10,7 +10,6 @@ import java.util.*;
 
 class ExplorationManager {
     PApplet parent;
-    Collisions collisionsManager;
 
     PGraphics fogLayer;
     int fogColor;
@@ -26,7 +25,7 @@ class ExplorationManager {
     ArrayList<PVector> path;
     Random random;
 
-    private Tank tank;
+    Tank tank;
     boolean autoExplore;
     float visibilityRadius;
     float minNodeDistance;
@@ -171,7 +170,7 @@ class ExplorationManager {
         parent.println("Tank appears stuck - changing direction");
 
         float randomAngle = random.nextFloat() * PApplet.TWO_PI;
-        PVector escapeDirection = new PVector(parent.cos(randomAngle), parent.sin(randomAngle));
+        PVector escapeDirection = new PVector(PApplet.cos(randomAngle), PApplet.sin(randomAngle));
 
         if (Math.abs(escapeDirection.x) > Math.abs(escapeDirection.y)) {
             tank.state = escapeDirection.x > 0 ? 1 : 2;
@@ -248,8 +247,20 @@ class ExplorationManager {
      * @return true if there is clear line of sight, false if obstructed
      */
     boolean canSee(PVector from, PVector to) {
-        if (collisionsManager != null) {
-            return collisionsManager.canSee(from, to);
+        if (parent instanceof tanks_bas_v1_0) {
+            tanks_bas_v1_0 game = (tanks_bas_v1_0) parent;
+            // Get trees directly from the game instead of calling collisions
+            Tree[] treesToCheck = game.allTrees;
+            if (treesToCheck != null) {
+                for (Tree tree : treesToCheck) {
+                    if (tree != null) {
+                        // Use local lineIntersectsTree method instead of calling collisions
+                        if (lineIntersectsTree(from, to, tree.position, tree.radius + 10)) {
+                            return false;
+                        }
+                    }
+                }
+            }
         }
         return true;
     }
@@ -481,21 +492,22 @@ class ExplorationManager {
             }
         }
 
-        if (collisionsManager != null && collisionsManager.trees != null) {
-            for (Tree tree : collisionsManager.trees) {
-                if (tree != null) {
-                    if (lineIntersectsTree(tank.position, pos, tree.position, tree.radius)) {
+        if (parent instanceof tanks_bas_v1_0) {
+            tanks_bas_v1_0 game = (tanks_bas_v1_0) parent;
+            if (game.allTrees != null) {
+                for (Tree tree : game.allTrees) {
+                    if(lineIntersectsTree(tank.position, pos, tree.position, tree.radius)){
                         return false;
                     }
-
-                    float dist = PVector.dist(pos, tree.position);
-                    if (dist < tree.radius + 60) {
-                        return false;
+                    if (tree != null) {
+                        float dist = PVector.dist(pos, tree.position);
+                        if (dist < tree.radius + 60) {
+                            return false;
+                        }
                     }
                 }
             }
         }
-
         return true;
     }
     /**
@@ -509,10 +521,7 @@ class ExplorationManager {
      * @return true if the line intersects with the tree, false otherwise
      */
     boolean lineIntersectsTree(PVector start, PVector end, PVector center, float radius) {
-        if (collisionsManager != null) {
-            return collisionsManager.lineIntersectsTree(start, end, center, radius);
-        }
-
+        // Direct implementation instead of calling collisions
         PVector d = PVector.sub(end, start);
         PVector f = PVector.sub(start, center);
 

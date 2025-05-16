@@ -56,46 +56,52 @@ public class tanks_bas_v1_0 extends PApplet{
    * Creates tanks, trees, collision manager, and exploration manager.
    */
   public void setup() {
-    up = false;
-    down = false;
-    mouse_pressed = false;
+    up             = false;
+    down           = false;
+    mouse_pressed  = false;
 
-    gameOver = false;
-    pause = true;
+    gameOver       = false;
+    pause          = true;
 
-    // Initialize trees
+    // Trad
     tree_img = loadImage("tree01_v2.png");
-    // ... rest of tree setup ...
+    if(tree_img == null)
+      println("Image could not load");
+    else{
+      println("Image loaded successfully!");
+    }
+    tree1_pos = new PVector(230, 600);
+    tree2_pos = new PVector(280, 230);
+    tree3_pos = new PVector(530, 520);
+
+    //trees
+    allTrees[0] = new Tree(this, tree_img, tree1_pos.x, tree1_pos.y);
+    allTrees[1] = new Tree(this, tree_img, tree2_pos.x, tree2_pos.y);
+    allTrees[2] = new Tree(this, tree_img, tree3_pos.x, tree3_pos.y);
 
     tank_size = 50;
 
-    // Initialize team colors
-    team0Color = color(204, 50, 50);
-    team1Color = color(0, 150, 200);
+    // Team0
+    team0Color  = color(204, 50, 50);// Base Team 0(red)
+    team0_tank0_startpos  = new PVector(50, 50);
+    team0_tank1_startpos  = new PVector(50, 150);
+    team0_tank2_startpos  = new PVector(50, 250);
 
-    // Initialize tank positions
-    team0_tank0_startpos = new PVector(50, 50);
-    team0_tank1_startpos = new PVector(50, 150);
-    team0_tank2_startpos = new PVector(50, 250);
+    // Team1
+    team1Color  = color(0, 150, 200);             // Base Team 1(blue)
+    team1_tank0_startpos  = new PVector(width-50, height-250);
+    team1_tank1_startpos  = new PVector(width-50, height-150);
+    team1_tank2_startpos  = new PVector(width-50, height-50);
 
-    team1_tank0_startpos = new PVector(width-50, height-250);
-    team1_tank1_startpos = new PVector(width-50, height-150);
-    team1_tank2_startpos = new PVector(width-50, height-50);
+    //tank0_startpos = new PVector(50, 50);
+    tank0 = new Tank(this,"tank0", team0_tank0_startpos,tank_size, team0Color );
+    tank1 = new Tank(this,"tank1", team0_tank1_startpos,tank_size, team0Color );
+    tank2 = new Tank(this,"tank2", team0_tank2_startpos,tank_size, team0Color );
 
-    // Create teams
-    team0 = new Team(this, team0Color, new PVector(0, 0), new PVector(150, 350));
-    team1 = new Team(this, team1Color, new PVector(width - 151, height - 351), new PVector(150, 350));
+    tank3 = new Tank(this,"tank3", team1_tank0_startpos,tank_size, team1Color );
+    tank4 = new Tank(this,"tank4", team1_tank1_startpos,tank_size, team1Color );
+    tank5 = new Tank(this,"tank5", team1_tank2_startpos,tank_size, team1Color );
 
-    // Create tanks
-    tank0 = new Tank(this, "tank0", team0_tank0_startpos, tank_size, team0Color);
-    tank1 = new Tank(this, "tank1", team0_tank1_startpos, tank_size, team0Color);
-    tank2 = new Tank(this, "tank2", team0_tank2_startpos, tank_size, team0Color);
-
-    tank3 = new Tank(this, "tank3", team1_tank0_startpos, tank_size, team1Color);
-    tank4 = new Tank(this, "tank4", team1_tank1_startpos, tank_size, team1Color);
-    tank5 = new Tank(this, "tank5", team1_tank2_startpos, tank_size, team1Color);
-
-    // Add tanks to array for rendering
     allTanks[0] = tank0;
     allTanks[1] = tank1;
     allTanks[2] = tank2;
@@ -103,33 +109,27 @@ public class tanks_bas_v1_0 extends PApplet{
     allTanks[4] = tank4;
     allTanks[5] = tank5;
 
-    // Create collision manager
     collisions = new Collisions(this);
     collisions.setTrees(allTrees);
 
-    // OPTION 1: For transition period, keep using ExplorationManager directly for tank0
-    //explorationManager = new ExplorationManager(this, 25f);
-    //explorationManager.initializeFog();
-    //explorationManager.setTank(tank0);
-    //explorationManager.collisionsManager = collisions;
+    team0 = new Team(this, team0Color, new PVector(0, 0), new PVector(150, 350));
+    team1 = new Team(this, team1Color, new PVector(width - 151, height - 351), new PVector(150, 350));
 
-    // Create tank agent for tank0
-    tankAgent0 = new TankAgent(this, tank0);
-
-    // Add tanks to team0
     team0.addTank(tank0);
     team0.addTank(tank1);
-    team0.addTank(tank2);
+    //team0.addTank(tank2);
 
-    // Set up collision handlers
+    tankAgent0 = team0.agents.get(0);
+
     team0.setupCollisionHandlers(collisions);
+
+    explorationManager = tankAgent0.explorationManager;
   }
   /**
    * Main game loop function.
    * Updates game logic, checks for collisions, and renders the game state.
    */
-  public void draw()
-  {
+  public void draw() {
     frameRate(60);
     background(200);
     checkForInput();
@@ -140,23 +140,25 @@ public class tanks_bas_v1_0 extends PApplet{
       // CHECK FOR COLLISIONS
       checkForCollisions();
 
-      if(team0.getExplorationPercent() >= 80){ //ändra senare
+      // CHANGED: Use team's exploration percent instead
+      if (team0.getExplorationPercent() >= 80) {
         gameOver = true;
-      }else{
-        // Update exploration
+      } else {
+        // CHANGED: Update via team instead of directly
         team0.update();
       }
-
-
     }
 
     // UPDATE DISPLAY
+    // CHANGED: Let team handle its base display
     team0.displayHomeBase();
     displayTrees();
-    team0.display(); // This displays both nodes and fog
+    // CHANGED: Use team display
+    team0.display();
     displayTanks();
     displayGUI();
   }
+
 
   /**
    * Checks for keyboard input and updates the tank's state accordingly.
@@ -208,7 +210,9 @@ public class tanks_bas_v1_0 extends PApplet{
   void checkForCollisions() {
     collisions.checkAllCollisions(allTanks, allTrees);
   }
-  
+
+
+
   /**
    * Displays the home bases for both teams.
    * Draws rectangles with team colors at the appropriate locations.
@@ -313,13 +317,13 @@ public class tanks_bas_v1_0 extends PApplet{
       team0.toggleAutoExplore();
     }
     if (key == 'r' || key == 'R') {
-      explorationManager.testDijkstra = false;
+      tankAgent0.setPathfindingAlgorithm("A*");
       team0.returnAllHome();
     }
 
     if(key == 'd' || key == 'D'){
-      tankAgent0.testDijkstra = true;
-      tankAgent0.testReturnHome();
+      tankAgent0.setPathfindingAlgorithm("Dijkstra");
+      tankAgent0.returnHome();
     }
 
   }
