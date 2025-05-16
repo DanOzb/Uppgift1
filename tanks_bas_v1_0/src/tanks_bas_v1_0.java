@@ -209,6 +209,24 @@ public class tanks_bas_v1_0 extends PApplet{
    */
   void checkForCollisions() {
     collisions.checkAllCollisions(allTanks, allTrees);
+
+    for (Tank tank : allTanks) {
+      if (tank != null) {
+        // Check projectile collision with trees
+        for (Tree tree : allTrees) {
+          if (tree != null) {
+            tank.projectile.checkTreeCollision(tree);
+          }
+        }
+
+        // Check projectile collision with other tanks
+        for (Tank otherTank : allTanks) {
+          if (otherTank != null && otherTank != tank) {
+            tank.projectile.checkTankCollision(otherTank);
+          }
+        }
+      }
+    }
   }
 
   /**
@@ -307,6 +325,9 @@ public class tanks_bas_v1_0 extends PApplet{
     if(key == 'd' || key == 'D'){
       tankAgent0.setPathfindingAlgorithm("Dijkstra");
       team0.returnAllHome();
+    }
+    if(key == '2'){
+      //
     }
   }
 

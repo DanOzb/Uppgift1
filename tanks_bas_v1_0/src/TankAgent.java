@@ -129,9 +129,62 @@ public class TankAgent {
     }
 
 
-    void update() { //TODO: ????
-        // No need to call updateTankPosition or navigation directly
-        // These are handled by the exploration manager for all tanks
+    void update() {
+        // Determine if we should shoot based on sensor data
+        if (!tank.isDestroyed && explorationManager.isAutoExploreActive()) {
+            ArrayList<SensorDetection> detections = tank.scan(
+                    ((tanks_bas_v1_0)parent).allTanks,
+                    ((tanks_bas_v1_0)parent).allTrees
+            );
+
+            // Process detections - look for enemies
+            boolean enemyInSight = false;
+            for (SensorDetection detection : detections) {
+                if (detection.type == SensorDetection.ObjectType.ENEMY) {
+                    // Enemy detected - determine if we should attack
+                    float distance = PVector.dist(tank.position, detection.position);
+                    if (distance < 200) { // Within attack range
+                        enemyInSight = true;
+                        currentState = AgentState.ATTACKING;
+
+                        // Face the enemy
+                        PVector direction = PVector.sub(detection.position, tank.position);
+                        faceDirection(direction);
+
+                        // Try to shoot
+                        tank.fire();
+                        break;
+                    }
+                }
+            }
+
+            // If no enemies in sight and we were attacking, go back to exploring
+            if (!enemyInSight && currentState == AgentState.ATTACKING) {
+                currentState = AgentState.EXPLORING;
+            }
+        }
+    }
+
+    private void faceDirection(PVector direction) {
+        direction.normalize();
+
+        // Determine which of the 8 directions is closest
+        float angle = PApplet.atan2(direction.y, direction.x);
+
+        // Convert to 8-way direction (0-7)
+        int octant = (int)(8 * (angle + PApplet.PI) / (2 * PApplet.PI) + 0.5) % 8;
+
+        // Map octant to tank state
+        switch (octant) {
+            case 0: tank.state = 1; break; // Right
+            case 1: tank.state = 5; break; // Right+Down
+            case 2: tank.state = 3; break; // Down
+            case 3: tank.state = 7; break; // Left+Down
+            case 4: tank.state = 2; break; // Left
+            case 5: tank.state = 8; break; // Left+Up
+            case 6: tank.state = 4; break; // Up
+            case 7: tank.state = 6; break; // Right+Up
+        }
     }
 
     void borderCollisionHandle() {
@@ -187,11 +240,6 @@ public class TankAgent {
         }
     }
 
-    void toggleAutoExplore() {
-        // This now toggles auto-explore for all tanks
-        explorationManager.toggleAutoExplore();
-    }
-
     boolean isAutoExploreActive() {
         return explorationManager.isAutoExploreActive();
     }
@@ -202,16 +250,5 @@ public class TankAgent {
         } else {
             explorationManager.testDijkstra = false;
         }
-    }
-
-    void returnHome() {
-        explorationManager.returnHome(tank);
-    }
-
-    // No need for a separate display method, as the exploration manager
-    // will handle displaying for all tanks
-
-    float getExplorationPercent() {
-        return explorationManager.exploredPercent;
     }
 }

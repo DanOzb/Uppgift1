@@ -95,9 +95,16 @@ class Sensor {
             if (otherTank != null && otherTank != tank) {
                 PVector intersection = lineCircleIntersection(start, end, otherTank.position, otherTank.diameter/2);
                 if (intersection != null) {
-                    SensorDetection.ObjectType type = (otherTank.col == tank.col) ?
-                            SensorDetection.ObjectType.FRIEND :
-                            SensorDetection.ObjectType.ENEMY;
+                    SensorDetection.ObjectType type;
+
+                    // Identify friend or enemy based on color
+                    if (otherTank.col == tank.col) {
+                        type = SensorDetection.ObjectType.FRIEND;
+                    } else {
+                        type = SensorDetection.ObjectType.ENEMY;
+                    }
+
+                    // Add detection with a reference to the actual tank
                     detections.add(new SensorDetection(intersection.copy(), type, otherTank));
                 }
             }
@@ -128,7 +135,7 @@ class Sensor {
                 detections.add(new SensorDetection(baseCenter.copy(), type, game.team1));
             }
         }
-
+        visualize(detections);
         return detections;
     }
 

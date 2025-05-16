@@ -28,6 +28,14 @@ class Tank {
     boolean isInTransition;
     boolean collisionDetected;
 
+     int health = 3;
+    boolean isDestroyed = false;
+    Projectile projectile;
+     int reloadTime = 180; // 3 seconds at 60 fps
+     int reloadCounter = 0;
+     boolean canFire = true;
+     int hits = 0;
+
     Sensor losSensor;
 
     /**
@@ -59,14 +67,70 @@ class Tank {
 
         this.fieldOfView = 100.0f;
 
-        this.losSensor = new Sensor(parent, this, 120.0f, PApplet.radians(45));
+        this.losSensor = new Sensor(parent, this, 280.0f, PApplet.radians(45));
 
+        this.projectile = new Projectile(parent, this);
+
+    }
+    void registerHit() {
+        hits++;
+        parent.println(name + " scored a hit! Total hits: " + hits);
     }
 
     ArrayList<SensorDetection> scan(Tank[] allTanks, Tree[] allTrees) {
         return losSensor.scan(allTanks, allTrees);
     }
 
+    /**
+     * Handles being hit by a projectile.
+     *
+     * @return true if the hit was registered, false if tank was already destroyed
+     */
+    boolean handleHit() {
+        if (isDestroyed) return false;
+
+        health--;
+        parent.println(name + " was hit! Health: " + health);
+
+        if (health <= 0) {
+            isDestroyed = true;
+            velocity.set(0, 0);
+            acceleration.set(0, 0);
+            parent.println(name + " was destroyed!");
+        }
+
+        return true;
+    }
+
+    void fire() {
+        if (!canFire || isDestroyed) return;
+
+        // Calculate firing direction based on tank state
+        PVector direction = new PVector();
+        switch (state) {
+            case 0: direction.set(1, 0); break; // Default right when stationary
+            case 1: direction.set(1, 0); break; // Right
+            case 2: direction.set(-1, 0); break; // Left
+            case 3: direction.set(0, 1); break; // Down
+            case 4: direction.set(0, -1); break; // Up
+            case 5: direction.set(1, 1); break; // Right+Down
+            case 6: direction.set(1, -1); break; // Right+Up
+            case 7: direction.set(-1, 1); break; // Left+Down
+            case 8: direction.set(-1, -1); break; // Left+Up
+        }
+
+        direction.normalize();
+
+        // Calculate starting position at the end of the cannon
+        PVector cannonEnd = PVector.add(position, PVector.mult(direction, diameter/2 + 5));
+
+        // Fire projectile
+        projectile.fire(cannonEnd, direction);
+        canFire = false;
+        reloadCounter = reloadTime;
+
+        parent.println(name + " fired!");
+    }
 
     /**
      * Stops the tank's movement by setting velocity to zero.
@@ -81,46 +145,57 @@ class Tank {
      */
     void update() {
         // Update movement based on current state
-        switch (state) {
-            case 0:
-                // Stop moving
-                stopMoving();
-                break;
-            case 1:
-                // Move right
-                velocity.x = accelerateTowards(velocity.x, maxspeed);
-                break;
-            case 2:
-                // Move left
-                velocity.x = accelerateTowards(velocity.x, -maxspeed);
-                break;
-            case 3:
-                // Move down
-                velocity.y = accelerateTowards(velocity.y, maxspeed);
-                break;
-            case 4:
-                // Move up
-                velocity.y = accelerateTowards(velocity.y, -maxspeed);
-                break;
-            case 5:  // Right + Down (diagonal)
-                velocity.x = accelerateTowards(velocity.x, maxspeed * 0.7071f);
-                velocity.y = accelerateTowards(velocity.y, maxspeed * 0.7071f);
-                break;
-            case 6:  // Right + Up (diagonal)
-                velocity.x = accelerateTowards(velocity.x, maxspeed * 0.7071f);
-                velocity.y = accelerateTowards(velocity.y, -maxspeed * 0.7071f);
-                break;
-            case 7:  // Left + Down (diagonal)
-                velocity.x = accelerateTowards(velocity.x, -maxspeed * 0.7071f);
-                velocity.y = accelerateTowards(velocity.y, maxspeed * 0.7071f);
-                break;
-            case 8:  // Left + Up (diagonal)
-                velocity.x = accelerateTowards(velocity.x, -maxspeed * 0.7071f);
-                velocity.y = accelerateTowards(velocity.y, -maxspeed * 0.7071f);
-                break;
+        if (!isDestroyed) {
+            switch (state) {
+                case 0:
+                    // Stop moving
+                    stopMoving();
+                    break;
+                case 1:
+                    // Move right
+                    velocity.x = accelerateTowards(velocity.x, maxspeed);
+                    break;
+                case 2:
+                    // Move left
+                    velocity.x = accelerateTowards(velocity.x, -maxspeed);
+                    break;
+                case 3:
+                    // Move down
+                    velocity.y = accelerateTowards(velocity.y, maxspeed);
+                    break;
+                case 4:
+                    // Move up
+                    velocity.y = accelerateTowards(velocity.y, -maxspeed);
+                    break;
+                case 5:  // Right + Down (diagonal)
+                    velocity.x = accelerateTowards(velocity.x, maxspeed * 0.7071f);
+                    velocity.y = accelerateTowards(velocity.y, maxspeed * 0.7071f);
+                    break;
+                case 6:  // Right + Up (diagonal)
+                    velocity.x = accelerateTowards(velocity.x, maxspeed * 0.7071f);
+                    velocity.y = accelerateTowards(velocity.y, -maxspeed * 0.7071f);
+                    break;
+                case 7:  // Left + Down (diagonal)
+                    velocity.x = accelerateTowards(velocity.x, -maxspeed * 0.7071f);
+                    velocity.y = accelerateTowards(velocity.y, maxspeed * 0.7071f);
+                    break;
+                case 8:  // Left + Up (diagonal)
+                    velocity.x = accelerateTowards(velocity.x, -maxspeed * 0.7071f);
+                    velocity.y = accelerateTowards(velocity.y, -maxspeed * 0.7071f);
+                    break;
+            }
+            // Apply velocity to position
+            position.add(velocity);
         }
-        // Apply velocity to position
-        position.add(velocity);
+        projectile.update();
+
+        // Handle reload timer
+        if (!canFire) {
+            reloadCounter--;
+            if (reloadCounter <= 0) {
+                canFire = true;
+            }
+        }
     }
 
     /**
@@ -132,16 +207,30 @@ class Tank {
      */
     void drawTank(float x, float y) {
         parent.fill(this.col, 50);
-
         parent.ellipse(x, y, 50, 50);
-        parent.strokeWeight(1);
-        parent.line(x, y, x+25, y);
+
+        // Determine cannon direction based on state
+        PVector cannonDir = new PVector();
+        switch (state) {
+            case 0: cannonDir.set(1, 0); break; // Default right when stationary
+            case 1: cannonDir.set(1, 0); break; // Right
+            case 2: cannonDir.set(-1, 0); break; // Left
+            case 3: cannonDir.set(0, 1); break; // Down
+            case 4: cannonDir.set(0, -1); break; // Up
+            case 5: cannonDir.set(1, 1).normalize(); break; // Right+Down
+            case 6: cannonDir.set(1, -1).normalize(); break; // Right+Up
+            case 7: cannonDir.set(-1, 1).normalize(); break; // Left+Down
+            case 8: cannonDir.set(-1, -1).normalize(); break; // Left+Up
+        }
+
+        // Draw cannon
+        parent.strokeWeight(3);
+        float cannonLength = this.diameter/2 + 5;
+        parent.line(x, y, x + cannonDir.x * cannonLength, y + cannonDir.y * cannonLength);
 
         // Cannon turret
-        parent.ellipse(0, 0, 25, 25);
-        parent.strokeWeight(3);
-        float cannon_length = this.diameter/2;
-        parent.line(0, 0, cannon_length, 0);
+        parent.ellipse(x, y, 25, 25);
+        parent.strokeWeight(1);
     }
 
     /**
@@ -153,15 +242,45 @@ class Tank {
         parent.strokeWeight(1);
 
         parent.pushMatrix();
-
         parent.translate(this.position.x, this.position.y);
 
+        // Display field of view
         displayFOV();
 
         parent.imageMode(parent.CENTER);
-        drawTank(0, 0);
-        parent.imageMode(parent.CORNER);
 
+        // Draw the tank differently if destroyed
+        if (isDestroyed) {
+            parent.fill(100, 100, 100); // Gray color for destroyed tank
+            parent.ellipse(0, 0, diameter, diameter);
+
+            // Draw X on destroyed tank
+            parent.stroke(0);
+            parent.strokeWeight(3);
+            parent.line(-diameter/4, -diameter/4, diameter/4, diameter/4);
+            parent.line(-diameter/4, diameter/4, diameter/4, -diameter/4);
+        } else {
+            // Use the modified drawTank method (see below)
+            drawTank(0, 0);
+
+            // Draw health bar
+            parent.noStroke();
+            parent.fill(255, 0, 0); // Red background
+            parent.rect(-diameter/2, -diameter/2 - 10, diameter, 5);
+
+            parent.fill(0, 255, 0); // Green health
+            float healthWidth = (health / 3.0f) * diameter;
+            parent.rect(-diameter/2, -diameter/2 - 10, healthWidth, 5);
+
+            // Draw reload indicator
+            if (!canFire) {
+                parent.fill(255, 255, 0); // Yellow
+                float reloadWidth = ((reloadTime - reloadCounter) / (float)reloadTime) * diameter;
+                parent.rect(-diameter/2, -diameter/2 - 5, reloadWidth, 3);
+            }
+        }
+
+        // Display tank info - maintaining original code
         parent.strokeWeight(1);
         parent.fill(230, 50f);
         parent.rect(0 + 25, 0 - 25, 100, 60);
@@ -171,12 +290,8 @@ class Tank {
 
         parent.popMatrix();
 
-        // If we have detections, visualize them
-        if (parent instanceof tanks_bas_v1_0) { //TODO: inte instanceof
-            tanks_bas_v1_0 game = (tanks_bas_v1_0) parent;
-            ArrayList<SensorDetection> detections = scan(game.allTanks, game.allTrees);
-            losSensor.visualize(detections);
-        }
+        // Display projectile
+        projectile.display();
     }
     /**
      * Displays the field of view (FOV) around the tank.
