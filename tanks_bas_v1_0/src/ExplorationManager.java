@@ -9,6 +9,7 @@ import java.util.*;
 class ExplorationManager {
     PApplet parent;
 
+
     PGraphics fogLayer;
     int fogColor;
     int fogAlpha;
@@ -33,6 +34,7 @@ class ExplorationManager {
     HashMap<Tank, PVector> lastPositions;
     HashMap<Tank, Integer> samePositionCounters;
     HashMap<Tank, NavigationState> navStates;
+    HashMap<Tank, Long> lastTargetUpdateTime;
 
     int clearedPixels;
     int totalPixels;
@@ -83,6 +85,7 @@ class ExplorationManager {
         this.samePositionCounters = new HashMap<Tank, Integer>();
         this.navStates = new HashMap<Tank, NavigationState>();
         this.startPositionCounters = new HashMap<Tank, Integer>();
+        this.lastTargetUpdateTime = new HashMap<Tank, Long>();
 
         this.testDijkstra = false;
 
@@ -241,7 +244,7 @@ class ExplorationManager {
      * Changes direction randomly to attempt to escape the stuck position.
      */
     void handleStuckTank(Tank tank) {
-        parent.println(tank.name + " appears stuck - changing direction");
+        //parent.println(tank.name + " appears stuck - changing direction");
 
         float randomAngle = random.nextFloat() * PApplet.TWO_PI;
         PVector escapeDirection = new PVector(PApplet.cos(randomAngle), PApplet.sin(randomAngle));
@@ -252,7 +255,8 @@ class ExplorationManager {
             tank.state = escapeDirection.y > 0 ? 3 : 4;
         }
 
-        if (targetNodes.containsKey(tank) && targetNodes.get(tank) != null || navStates.get(tank) == NavigationState.RETURNING_HOME) {
+        if (targetNodes.containsKey(tank) && targetNodes.get(tank) != null && navStates.get(tank) != NavigationState.RETURNING_HOME) {
+            parent.println("IT SHOULDN'T GET HERE");
             navStates.put(tank, NavigationState.EXPLORING);
             targetNodes.put(tank, null);
         }
@@ -424,20 +428,48 @@ class ExplorationManager {
                 Node targetNode = targetNodes.get(tank);
                 ArrayList<PVector> path = paths.get(tank);
 
-
+                long currentTime = parent.millis();
 
 
                 int startPositionCounter = startPositionCounters.get(tank);
                 if (targetNode != null && PVector.dist(tank.position, targetNode.position) < 20) {
+                    //targetnode har inte uppdaterats på 3s, findclosestnode -> a*
                     if (!path.isEmpty()) {
                         path.remove(0);
                     }
                     if (!path.isEmpty()) {
                         PVector nextPos = path.get(0);
                         Node nextNode = findClosestNode(nextPos);
+
                         if (nextNode != null) {
-                            targetNodes.put(tank, nextNode);
+                            // Check if we've been trying to update to this node for too long
+                            Long lastUpdate = lastTargetUpdateTime.get(tank);
+                            boolean shouldUpdate = true;
+
+                            if (lastUpdate != null && (currentTime - lastUpdate) < 2000) {
+                                // Less than 2 seconds have passed, don't update yet
+                                shouldUpdate = false;
+                            } else if (lastUpdate == null) {
+                                // First time, record the timestamp but don't update immediately
+                                lastTargetUpdateTime.put(tank, currentTime);
+                                shouldUpdate = false;
+                            }
+
+                            if (shouldUpdate) {
+                                // 2 seconds have passed, now we can update the target
+                                targetNodes.put(tank, nextNode);
+                                lastTargetUpdateTime.put(tank, currentTime); // Reset timer
+                                System.out.println(tank.name + " updated target after 2 second delay");
+                            }
                         }
+                    }
+                }
+                if (targetNode == null) {
+                    Long lastUpdate = lastTargetUpdateTime.get(tank);
+                    if (lastUpdate == null || (currentTime - lastUpdate) > 2000) {
+                        System.out.println(tank.name + " recalculating path after timeout");
+                        recalculatePathFromCurrentPosition(tank);
+                        lastTargetUpdateTime.put(tank, currentTime);
                     }
                 }
 
@@ -448,8 +480,6 @@ class ExplorationManager {
                 if (areAllTanksHome()) {
                     navStates.put(tank, NavigationState.POSITION_AROUND_ENEMY_BASE);
                 }
-
-                startPositionCounters.put(tank, startPositionCounter);
                 break;
 
             case EXPLORING:
@@ -457,6 +487,9 @@ class ExplorationManager {
                 targetNode = targetNodes.get(tank);
 
                 if (targetNode == null || PVector.dist(tank.position, targetNode.position) < 20) {
+                    if( navStates.get(tank) == NavigationState.RETURNING_HOME){
+                        return;
+                    }
                     targetNode = selectExplorationTarget(tank);
                     if (targetNode != null) {
                         navStates.put(tank, NavigationState.MOVING_TO_TARGET);
@@ -472,7 +505,10 @@ class ExplorationManager {
                 moveTowardTarget(tank);
                 targetNode = targetNodes.get(tank);
 
-                if (targetNode != null && PVector.dist(tank.position, targetNode.position) < 50 || navStates.get(tank) == NavigationState.RETURNING_HOME) {
+                if (targetNode != null && PVector.dist(tank.position, targetNode.position) < 50) {
+                    if (navStates.get(tank) == NavigationState.RETURNING_HOME) {
+                        return;
+                    }
                     targetNode.markVisited();
                     navStates.put(tank, NavigationState.EXPLORING);
                     targetNodes.put(tank, null);
@@ -495,6 +531,35 @@ class ExplorationManager {
                 //för varje position som rörts, ta bort ett element tills empty
 
                 break;
+        }
+    }
+
+    void recalculatePathFromCurrentPosition(Tank tank) {
+        Node currentNode = findClosestNode(tank.position);
+        if (currentNode == null || PVector.dist(currentNode.position, tank.position) > minNodeDistance) {
+            currentNode = addNode(tank.position.x, tank.position.y);
+        }
+        currentNodes.put(tank, currentNode);
+
+        ArrayList<Node> pathingHome;
+        if (testDijkstra) {
+            pathingHome = dijkstra(currentNode, baseNode);
+        } else {
+            pathingHome = aStar(currentNode, baseNode);
+        }
+
+        ArrayList<PVector> path = new ArrayList<>();
+        if (!pathingHome.isEmpty()) {
+            for (Node node : pathingHome) {
+                path.add(node.position.copy());
+            }
+            paths.put(tank, path);
+
+            if (pathingHome.size() > 1) {
+                targetNodes.put(tank, pathingHome.get(0));
+            } else {
+                targetNodes.put(tank, baseNode);
+            }
         }
     }
 
@@ -688,7 +753,7 @@ class ExplorationManager {
             newPos.x = PApplet.constrain(newPos.x, 20, parent.width - 20);
             newPos.y = PApplet.constrain(newPos.y, 20, parent.height - 20);
 
-            if (isValidNodePosition(newPos, tank)) {
+            if (isValidNodePosition(newPos, tank) && navStates.get(tank) != NavigationState.RETURNING_HOME) {
                 Node newNode = addNode(newPos.x, newPos.y);
                 targetNodes.put(tank, newNode);
                 navStates.put(tank, NavigationState.MOVING_TO_TARGET);

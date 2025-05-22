@@ -1,6 +1,5 @@
 import processing.core.*;
-import java.util.ArrayList;
-
+import java.util.*;
 /**
  * Manages all collision detection and resolution between game entities.
  * This class handles collisions between tanks, trees, base boundaries, and screen borders.
@@ -107,7 +106,6 @@ public class Collisions {
 
             boolean treeCollision = checkTreeCollisions(allTanks[i], allTrees);
 
-            // CHANGED: This part needs to use the collision handler instead of direct reference
             if (treeCollision && collisionHandler != null && !collisionHandler.isReturningHome(allTanks[i])) {
                 // Notify the handler about a persistent tree collision
                 collisionHandler.handleTreeCollision(allTanks[i], null);  // Pass null to indicate a persistent collision
@@ -209,41 +207,10 @@ public class Collisions {
         float minDistance = tank.diameter/2 + otherTank.diameter/2;
 
         if (distanceVecMag < minDistance) {
-            if (sameTeam) {
-                tank.velocity.mult(0);
+            collisionHandler.handleTankCollision(tank, otherTank);
 
-                if (Math.abs(distanceVect.x) > Math.abs(distanceVect.y)) {
-                    tank.state = distanceVect.x > 0 ? 1 : 2;
-                } else {
-                    tank.state = distanceVect.y > 0 ? 3 : 4;
-                }
-
-                parent.println(tank.name + " detected friendly " + otherTank.name + " and changed direction");
-                return;
             }
-
-            float overlap = minDistance - distanceVecMag;
-
-            if (distanceVecMag < 0.1f) {
-                distanceVect = new PVector(1, 0);
-            } else {
-                distanceVect.normalize();
-            }
-
-            // Push both tanks away from each other
-            tank.position.x += distanceVect.x * overlap * 0.5f;
-            tank.position.y += distanceVect.y * overlap * 0.5f;
-            otherTank.position.x -= distanceVect.x * overlap * 0.5f;
-            otherTank.position.y -= distanceVect.y * overlap * 0.5f;
-
-            float dotProduct = tank.velocity.x * distanceVect.x + tank.velocity.y * distanceVect.y;
-            if (dotProduct < 0) {
-                tank.velocity.x -= dotProduct * distanceVect.x;
-                tank.velocity.y -= dotProduct * distanceVect.y;
-            }
-
-            parent.println("Tank collision detected between " + tank.name + " and " + otherTank.name);
-        }
+            //parent.println("Tank collision detected between " + tank.name + " and " + otherTank.name);
     }
 
     /**
@@ -344,7 +311,7 @@ public class Collisions {
             collision = true;
         }
 
-        if (tank.position.y - r < 0) { // Top border
+        if (tank.position.y - r < 0) {// Top border
             tank.position.y = r;
             tank.velocity.y = -tank.velocity.y * 0.5f;
             collision = true;
@@ -444,7 +411,7 @@ public class Collisions {
             collisionHandler.handleBorderCollision(tank);
         } else {
             // Default behavior if no handler is set
-            parent.println("Border collision detected - adjusting navigation");
+            //parent.println("Border collision detected - adjusting navigation");
         }
     }
 }

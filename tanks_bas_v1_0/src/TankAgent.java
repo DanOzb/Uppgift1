@@ -1,10 +1,12 @@
 import processing.core.*;
 import java.util.ArrayList;
+import java.util.Objects;
 
 public class TankAgent {
     PApplet parent;
     Tank tank;
     ExplorationManager explorationManager; // This is now a reference to a shared instance
+    int counter;
 
     ArrayList<SensorDetection> lastSensorDetections;
 
@@ -69,6 +71,15 @@ public class TankAgent {
                 if (collidedTank == tank) {
                     System.out.println("Tank " + tank.name + " collided with enemy base");
                     explorationManager.returnAllHome();
+                }
+            }
+            @Override
+            public void handleTankCollision(Tank tank, Tank tank2) {
+                if (!Objects.equals(tank.navState, "idle") && !Objects.equals(tank2.navState, "idle")) {
+                    explorationManager.targetNodes.put(tank, explorationManager.findClosestNode(tank.position));
+                    explorationManager.moveTowardTarget(tank);
+
+                    System.out.println("Moved tanks");
                 }
             }
         });
