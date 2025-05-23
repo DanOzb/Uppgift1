@@ -76,9 +76,11 @@ public class TankAgent {
             @Override
             public void handleTankCollision(Tank tank, Tank tank2) {
                 if (!Objects.equals(tank.navState, "idle") && !Objects.equals(tank2.navState, "idle")) {
+                    Node temp = explorationManager.targetNodes.get(tank);
                     explorationManager.targetNodes.put(tank, explorationManager.findClosestNode(tank.position));
                     explorationManager.moveTowardTarget(tank);
-
+                    explorationManager.targetNodes.put(tank, temp);
+                    explorationManager.navigation();
                     System.out.println("Moved tanks");
                 }
             }
@@ -212,7 +214,14 @@ public class TankAgent {
         ExplorationManager.NavigationState navState = explorationManager.navStates.get(tank);
         Node targetNode = explorationManager.targetNodes.get(tank);
 
+        // Don't handle border collisions if tank is waiting at home
+        if (navState == ExplorationManager.NavigationState.WAITING_AT_HOME) {
+            return;
+        }
+
         if (navState == ExplorationManager.NavigationState.RETURNING_HOME) {
+            // If returning home and hitting a border, recalculate path to individual base node
+            explorationManager.recalculatePathFromCurrentPosition(tank);
             return;
         }
 

@@ -208,7 +208,6 @@ public class Collisions {
 
         if (distanceVecMag < minDistance) {
             collisionHandler.handleTankCollision(tank, otherTank);
-
             }
             //parent.println("Tank collision detected between " + tank.name + " and " + otherTank.name);
     }

@@ -9,7 +9,6 @@ import java.util.*;
 class ExplorationManager {
     PApplet parent;
 
-
     PGraphics fogLayer;
     int fogColor;
     int fogAlpha;
@@ -20,7 +19,7 @@ class ExplorationManager {
     ArrayList<Edge> edges;
     HashMap<Tank, Node> currentNodes; // Track current node for each tank
     HashMap<Tank, Node> targetNodes;  // Track target node for each tank
-    Node baseNode; // to return home
+    HashMap<Tank, Node> baseNodes;    // Each tank has its own base node
     HashMap<Tank, ArrayList<PVector>> paths; // Track path for each tank
     Random random;
 
@@ -35,6 +34,9 @@ class ExplorationManager {
     HashMap<Tank, Integer> samePositionCounters;
     HashMap<Tank, NavigationState> navStates;
     HashMap<Tank, Long> lastTargetUpdateTime;
+    HashMap<Tank, Long> homeArrivalTime; // Track when each tank arrived home
+    Long allTanksHomeTime;
+    int tankHomeCounter;
 
     int clearedPixels;
     int totalPixels;
@@ -48,8 +50,8 @@ class ExplorationManager {
     enum NavigationState {
         EXPLORING,
         MOVING_TO_TARGET,
-        BACKTRACKING,
         RETURNING_HOME,
+        WAITING_AT_HOME,
         POSITION_AROUND_ENEMY_BASE
     }
 
@@ -73,6 +75,7 @@ class ExplorationManager {
         this.tanks = new ArrayList<Tank>();
         this.currentNodes = new HashMap<Tank, Node>();
         this.targetNodes = new HashMap<Tank, Node>();
+        this.baseNodes = new HashMap<Tank, Node>();  // New: individual base nodes
         this.paths = new HashMap<Tank, ArrayList<PVector>>();
         this.random = new Random();
         this.autoExplore = false;
@@ -86,6 +89,8 @@ class ExplorationManager {
         this.navStates = new HashMap<Tank, NavigationState>();
         this.startPositionCounters = new HashMap<Tank, Integer>();
         this.lastTargetUpdateTime = new HashMap<Tank, Long>();
+        this.homeArrivalTime = new HashMap<Tank, Long>();
+        this.allTanksHomeTime = null;
 
         this.testDijkstra = false;
 
@@ -94,7 +99,7 @@ class ExplorationManager {
 
     /**
      * Adds a tank to be managed by this exploration manager.
-     * Creates a starting node at the tank's position if needed.
+     * Creates a starting node at the tank's position if needed and assigns it as the tank's base node.
      *
      * @param tank The tank to be added to this manager
      */
@@ -113,27 +118,25 @@ class ExplorationManager {
         navStates.put(tank, NavigationState.EXPLORING);
         startPositionCounters.put(tank, 0);
         paths.put(tank, new ArrayList<PVector>());
+        homeArrivalTime.put(tank, 0L);
 
-        // Create a node at tank's position if needed
-        Node startNode = null;
+        // Create or find a base node for this tank
+        Node tankBaseNode = null;
         for (Node existingNode : nodes) {
             if (PVector.dist(existingNode.position, tank.position) < minNodeDistance) {
-                startNode = existingNode;
+                tankBaseNode = existingNode;
                 break;
             }
         }
 
-        if (startNode == null) {
-            startNode = new Node(parent, tank.position.x, tank.position.y);
-            nodes.add(startNode);
+        if (tankBaseNode == null) {
+            tankBaseNode = new Node(parent, tank.position.x, tank.position.y);
+            nodes.add(tankBaseNode);
         }
 
-        currentNodes.put(tank, startNode);
-
-        // Initialize base node for the first tank (assumes tanks of same team start at similar positions)
-        if (baseNode == null) {
-            baseNode = startNode;
-        }
+        // Assign this node as both current and base node for the tank
+        currentNodes.put(tank, tankBaseNode);
+        baseNodes.put(tank, tankBaseNode);  // Each tank gets its own base node
 
         // Add to visited positions
         visitedPositions.add(tank.position.copy());
@@ -152,6 +155,7 @@ class ExplorationManager {
         tanks.remove(tank);
         currentNodes.remove(tank);
         targetNodes.remove(tank);
+        baseNodes.remove(tank);  // Remove the tank's base node reference
         previousDirections.remove(tank);
         stuckCounters.remove(tank);
         lastPositions.remove(tank);
@@ -159,6 +163,7 @@ class ExplorationManager {
         navStates.remove(tank);
         startPositionCounters.remove(tank);
         paths.remove(tank);
+        homeArrivalTime.remove(tank);
     }
 
     /**
@@ -418,6 +423,7 @@ class ExplorationManager {
      * Handles navigation for a specific tank.
      */
     private void navigateTank(Tank tank) {
+
         if (tank == null) return;
 
         NavigationState navState = navStates.get(tank);
@@ -427,12 +433,26 @@ class ExplorationManager {
                 tank.navState = "ReturningHome";
                 Node targetNode = targetNodes.get(tank);
                 ArrayList<PVector> path = paths.get(tank);
-
-                long currentTime = parent.millis();
-
-
                 int startPositionCounter = startPositionCounters.get(tank);
-                if (targetNode != null && PVector.dist(tank.position, targetNode.position) < 20) {
+
+                if(areAllTanksHome()){
+                    if(isAutoExploreActive()) {toggleAutoExplore();}
+                    Thread thread = new Thread(()->{
+                        try {
+                            Thread.sleep(1000);
+
+                        }catch (InterruptedException e){
+                            e.printStackTrace();
+                        } finally {
+                            navStates.put(tank, NavigationState.EXPLORING);
+                            if(!isAutoExploreActive()) {
+                                toggleAutoExplore();
+                            }
+                        }
+                    });
+                    thread.start();
+                }
+                else if (targetNode != null && PVector.dist(tank.position, targetNode.position) < 20) {
                     //targetnode har inte uppdaterats på 3s, findclosestnode -> a*
                     if (!path.isEmpty()) {
                         path.remove(0);
@@ -440,46 +460,16 @@ class ExplorationManager {
                     if (!path.isEmpty()) {
                         PVector nextPos = path.get(0);
                         Node nextNode = findClosestNode(nextPos);
-
                         if (nextNode != null) {
-                            // Check if we've been trying to update to this node for too long
-                            Long lastUpdate = lastTargetUpdateTime.get(tank);
-                            boolean shouldUpdate = true;
-
-                            if (lastUpdate != null && (currentTime - lastUpdate) < 2000) {
-                                // Less than 2 seconds have passed, don't update yet
-                                shouldUpdate = false;
-                            } else if (lastUpdate == null) {
-                                // First time, record the timestamp but don't update immediately
-                                lastTargetUpdateTime.put(tank, currentTime);
-                                shouldUpdate = false;
-                            }
-
-                            if (shouldUpdate) {
-                                // 2 seconds have passed, now we can update the target
-                                targetNodes.put(tank, nextNode);
-                                lastTargetUpdateTime.put(tank, currentTime); // Reset timer
-                                System.out.println(tank.name + " updated target after 2 second delay");
-                            }
+                            targetNodes.put(tank, nextNode);
                         }
-                    }
-                }
-                if (targetNode == null) {
-                    Long lastUpdate = lastTargetUpdateTime.get(tank);
-                    if (lastUpdate == null || (currentTime - lastUpdate) > 2000) {
-                        System.out.println(tank.name + " recalculating path after timeout");
-                        recalculatePathFromCurrentPosition(tank);
-                        lastTargetUpdateTime.put(tank, currentTime);
                     }
                 }
 
                 if (targetNode != null) {
                     moveTowardTarget(tank);
                 }
-
-                if (areAllTanksHome()) {
-                    navStates.put(tank, NavigationState.POSITION_AROUND_ENEMY_BASE);
-                }
+                startPositionCounters.put(tank, startPositionCounter);
                 break;
 
             case EXPLORING:
@@ -487,7 +477,7 @@ class ExplorationManager {
                 targetNode = targetNodes.get(tank);
 
                 if (targetNode == null || PVector.dist(tank.position, targetNode.position) < 20) {
-                    if( navStates.get(tank) == NavigationState.RETURNING_HOME){
+                    if(navStates.get(tank) == NavigationState.RETURNING_HOME){
                         return;
                     }
                     targetNode = selectExplorationTarget(tank);
@@ -515,20 +505,8 @@ class ExplorationManager {
                 }
                 break;
 
-            case BACKTRACKING:
-                tank.navState = "Backtracking";
-                Node currentNode = currentNodes.get(tank);
-                targetNode = targetNodes.get(tank);
-
-                if (currentNode != null && targetNode != null) {
-                    moveTowardTarget(tank);
-                } else {
-                    navStates.put(tank, NavigationState.EXPLORING);
-                }
-                break;
-
             case POSITION_AROUND_ENEMY_BASE:
-                //för varje position som rörts, ta bort ett element tills empty
+
 
                 break;
         }
@@ -541,11 +519,18 @@ class ExplorationManager {
         }
         currentNodes.put(tank, currentNode);
 
+        // Use the tank's individual base node instead of a shared baseNode
+        Node tankBaseNode = baseNodes.get(tank);
+        if (tankBaseNode == null) {
+            parent.println("Warning: No base node found for tank " + tank.name);
+            return;
+        }
+
         ArrayList<Node> pathingHome;
         if (testDijkstra) {
-            pathingHome = dijkstra(currentNode, baseNode);
+            pathingHome = dijkstra(currentNode, tankBaseNode);
         } else {
-            pathingHome = aStar(currentNode, baseNode);
+            pathingHome = aStar(currentNode, tankBaseNode);
         }
 
         ArrayList<PVector> path = new ArrayList<>();
@@ -558,7 +543,7 @@ class ExplorationManager {
             if (pathingHome.size() > 1) {
                 targetNodes.put(tank, pathingHome.get(0));
             } else {
-                targetNodes.put(tank, baseNode);
+                targetNodes.put(tank, tankBaseNode);
             }
         }
     }
@@ -828,7 +813,10 @@ class ExplorationManager {
 
     boolean areAllTanksHome(){
         for(Tank tank : tanks) {
-            if(!isInHomeBase(tank.position)) return false;
+
+            if(!(tank.position.x - baseNodes.get(tank).position.x < 5 && tank.position.y - baseNodes.get(tank).position.y < 5)) {
+                return false;
+            }
         }
         return true;
     }
@@ -905,8 +893,9 @@ class ExplorationManager {
         for (Node node : nodes) {
             boolean isCurrentNode = false;
             boolean isTargetNode = false;
+            boolean isBaseNode = false;
 
-            // Check if this node is a current or target node for any tank
+            // Check if this node is a current, target, or base node for any tank
             for (Tank tank : tanks) {
                 if (currentNodes.containsKey(tank) && node == currentNodes.get(tank)) {
                     isCurrentNode = true;
@@ -914,9 +903,14 @@ class ExplorationManager {
                 if (targetNodes.containsKey(tank) && node == targetNodes.get(tank)) {
                     isTargetNode = true;
                 }
+                if (baseNodes.containsKey(tank) && node == baseNodes.get(tank)) {
+                    isBaseNode = true;
+                }
             }
 
-            if (isCurrentNode) {
+            if (isBaseNode) {
+                parent.fill(0, 0, 255); // Blue for base nodes
+            } else if (isCurrentNode) {
                 parent.fill(0, 200, 0);
             } else if (isTargetNode) {
                 parent.fill(200, 200, 0);
@@ -953,7 +947,7 @@ class ExplorationManager {
 
     /**
      * Initiates the return home sequence for a tank.
-     * Calculates a path back to the home base node using A* pathfinding.
+     * Calculates a path back to the tank's individual home base node using A* pathfinding.
      */
     void returnHome(Tank tank) {
         navStates.put(tank, NavigationState.RETURNING_HOME);
@@ -965,12 +959,19 @@ class ExplorationManager {
         }
         currentNodes.put(tank, closestNode);
 
+        // Use the tank's individual base node instead of a shared baseNode
+        Node tankBaseNode = baseNodes.get(tank);
+        if (tankBaseNode == null) {
+            parent.println("Warning: No base node found for tank " + tank.name);
+            return;
+        }
+
         ArrayList<Node> pathingHome;
 
         if (testDijkstra)
-            pathingHome = dijkstra(closestNode, baseNode);
+            pathingHome = dijkstra(closestNode, tankBaseNode);
         else
-            pathingHome = aStar(closestNode, baseNode);
+            pathingHome = aStar(closestNode, tankBaseNode);
 
         ArrayList<PVector> path = new ArrayList<>();
         if (!pathingHome.isEmpty()) {
@@ -985,7 +986,7 @@ class ExplorationManager {
             if (pathingHome.size() > 1) {
                 targetNodes.put(tank, pathingHome.get(0));
             } else {
-                targetNodes.put(tank, baseNode);
+                targetNodes.put(tank, tankBaseNode);
             }
         }
     }
@@ -994,6 +995,9 @@ class ExplorationManager {
      * Initiates the return home sequence for all tanks.
      */
     void returnAllHome() {
+        // Reset the all-tanks-home timer when starting return sequence
+        allTanksHomeTime = null;
+
         for (Tank tank : tanks) {
             returnHome(tank);
         }
@@ -1147,6 +1151,6 @@ class ExplorationManager {
      */
     public boolean isReturningHome(Tank tank) {
         NavigationState state = navStates.get(tank);
-        return state == NavigationState.RETURNING_HOME;
+        return state == NavigationState.RETURNING_HOME || state == NavigationState.WAITING_AT_HOME;
     }
 }

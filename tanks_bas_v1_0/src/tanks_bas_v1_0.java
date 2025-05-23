@@ -117,6 +117,7 @@ public class tanks_bas_v1_0 extends PApplet{
 
     team0.addTank(tank0);
     team0.addTank(tank1);
+    team0.addTank(tank2);
     //team0.addTank(tank2);
 
     tankAgent0 = team0.agents.get(0);
