@@ -109,8 +109,7 @@ public class TankAgent {
                     // Handle enemy detection logic
                     // For example, change state to ATTACKING if appropriate
                     if (currentState == AgentState.EXPLORING) {
-                        currentState = AgentState.ATTACKING;
-                        // Could add attack behavior here
+                        //do something
                     }
                     break;
 

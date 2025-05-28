@@ -296,24 +296,28 @@ public class Collisions {
             tank.position.x = parent.width - r;
             tank.velocity.x = -tank.velocity.x * 0.5f;
             collision = true;
+            System.out.println("Right border");
         }
 
         if (tank.position.y + r > parent.height) { // Bottom border
             tank.position.y = parent.height - r;
             tank.velocity.y = -tank.velocity.y * 0.5f;
             collision = true;
+            System.out.println("Bottom border");
         }
 
         if (tank.position.x - r < 0) { // Left border
             tank.position.x = r;
             tank.velocity.x = -tank.velocity.x * 0.5f;
             collision = true;
+            System.out.println("Left border");
         }
 
         if (tank.position.y - r < 0) {// Top border
             tank.position.y = r;
             tank.velocity.y = -tank.velocity.y * 0.5f;
             collision = true;
+            System.out.println("Top border");
         }
 
         if (collision) {

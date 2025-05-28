@@ -8,6 +8,8 @@ import java.util.*;
  */
 class ExplorationManager {
     PApplet parent;
+    Thread threadInstane;
+
 
     PGraphics fogLayer;
     int fogColor;
@@ -94,6 +96,26 @@ class ExplorationManager {
 
         this.testDijkstra = false;
 
+        threadInstane = new Thread(() -> {
+            while(true) {
+                if(areAllTanksHome()){
+                    try {
+                        System.out.println("passed");
+                        Thread.sleep(3000);
+
+                    }catch (InterruptedException e){
+                        e.printStackTrace();
+                    } finally {
+                        for (Tank tank : tanks) {
+                            navStates.put(tank, NavigationState.EXPLORING);
+                        }
+                        if(!isAutoExploreActive()) {
+                            toggleAutoExplore();
+                        }
+                    }
+                }
+            }
+        });
         initializeFog();
     }
 
@@ -205,7 +227,8 @@ class ExplorationManager {
         PVector lastPosition = lastPositions.get(tank);
         int samePositionCounter = samePositionCounters.get(tank);
 
-        if (PVector.dist(tank.position, lastPosition) < 1.0f) {
+        // Only check for stuck tanks if auto-exploration is active
+        if (autoExplore && PVector.dist(tank.position, lastPosition) < 1.0f) {
             samePositionCounter++;
             if (samePositionCounter > 60) {
                 handleStuckTank(tank);
@@ -256,8 +279,10 @@ class ExplorationManager {
 
         if (Math.abs(escapeDirection.x) > Math.abs(escapeDirection.y)) {
             tank.state = escapeDirection.x > 0 ? 1 : 2;
+            parent.println("1");
         } else {
             tank.state = escapeDirection.y > 0 ? 3 : 4;
+            parent.println("2");
         }
 
         if (targetNodes.containsKey(tank) && targetNodes.get(tank) != null && navStates.get(tank) != NavigationState.RETURNING_HOME) {
@@ -414,9 +439,17 @@ class ExplorationManager {
     void navigation() {
         if (!autoExplore) return;
 
-        for (Tank tank : tanks) {
-            navigateTank(tank);
+        if(areAllTanksHome()){
+            if(isAutoExploreActive()) {toggleAutoExplore();}
+            if(!threadInstane.isAlive())
+                threadInstane.start();
+        }else {
+            for (Tank tank : tanks) {
+                navigateTank(tank);
+            }
         }
+
+
     }
 
     /**
@@ -435,24 +468,7 @@ class ExplorationManager {
                 ArrayList<PVector> path = paths.get(tank);
                 int startPositionCounter = startPositionCounters.get(tank);
 
-                if(areAllTanksHome()){
-                    if(isAutoExploreActive()) {toggleAutoExplore();}
-                    Thread thread = new Thread(()->{
-                        try {
-                            Thread.sleep(1000);
-
-                        }catch (InterruptedException e){
-                            e.printStackTrace();
-                        } finally {
-                            navStates.put(tank, NavigationState.EXPLORING);
-                            if(!isAutoExploreActive()) {
-                                toggleAutoExplore();
-                            }
-                        }
-                    });
-                    thread.start();
-                }
-                else if (targetNode != null && PVector.dist(tank.position, targetNode.position) < 20) {
+                if (targetNode != null && PVector.dist(tank.position, targetNode.position) < 20) {
                     //targetnode har inte uppdaterats på 3s, findclosestnode -> a*
                     if (!path.isEmpty()) {
                         path.remove(0);
@@ -506,8 +522,6 @@ class ExplorationManager {
                 break;
 
             case POSITION_AROUND_ENEMY_BASE:
-
-
                 break;
         }
     }
@@ -813,8 +827,10 @@ class ExplorationManager {
 
     boolean areAllTanksHome(){
         for(Tank tank : tanks) {
-
-            if(!(tank.position.x - baseNodes.get(tank).position.x < 5 && tank.position.y - baseNodes.get(tank).position.y < 5)) {
+            if(navStates.get(tank) != NavigationState.RETURNING_HOME) {
+                return false;
+            }
+            if(!(Math.abs(baseNodes.get(tank).position.x - tank.position.x) < 5 && Math.abs(baseNodes.get(tank).position.y- tank.position.y) < 5)) {
                 return false;
             }
         }

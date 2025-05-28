@@ -138,15 +138,9 @@ public class tanks_bas_v1_0 extends PApplet{
       updateTanksLogic();
       // CHECK FOR COLLISIONS
       checkForCollisions();
-
-      if (team0.getExplorationPercent() >= 80) {
-        gameOver = true;
-      } else {
         // Update the team, which now updates the shared exploration manager
         team0.update();
       }
-    }
-
     // UPDATE DISPLAY
     team0.displayHomeBase();
     displayTrees();

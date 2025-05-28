@@ -29,8 +29,8 @@ class Tank {
     boolean collisionDetected;
 
      int health = 3;
-    boolean isDestroyed = false;
-    Projectile projectile;
+     boolean isDestroyed = false;
+     Projectile projectile;
      int reloadTime = 180; // 3 seconds at 60 fps
      int reloadCounter = 0;
      boolean canFire = true;
@@ -67,7 +67,7 @@ class Tank {
 
         this.fieldOfView = 100.0f;
 
-        this.losSensor = new Sensor(parent, this, 280.0f, PApplet.radians(45));
+        this.losSensor = new Sensor(parent, this, 80.0f, PApplet.radians(45));
 
         this.projectile = new Projectile(parent, this);
 
@@ -136,8 +136,8 @@ class Tank {
      * Stops the tank's movement by setting velocity to zero.
      */
     void stopMoving() {
-        this.velocity = velocity.mult(0);
-        this.acceleration = acceleration.mult(0);
+        this.velocity.set(0, 0);  // Use set instead of mult
+        this.acceleration.set(0, 0);
     }
     /**
      * Updates the tank's position and velocity based on its current state.
@@ -317,10 +317,17 @@ class Tank {
      */
     float accelerateTowards(float current, float target) {
         float acceleration = 0.2f;
+        float difference = target - current;
+
+        // If we're very close to the target, snap to it
+        if (Math.abs(difference) <= acceleration) {
+            return target;
+        }
+
         if (current < target) {
-            return Math.min(current + acceleration, target);
+            return current + acceleration;
         } else if (current > target) {
-            return Math.max(current - acceleration, target);
+            return current - acceleration;
         }
         return current;
     }
