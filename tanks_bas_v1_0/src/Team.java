@@ -9,8 +9,13 @@ class Team {
     PVector basePosition;
     PVector baseSize;
 
+
     // Shared exploration manager for all tanks in the team
     ExplorationManager explorationManager;
+    PVector detectionPosition = null;
+    PVector detectedEnemyBase = null;
+    boolean enemyBaseDetected = false;
+    long enemyDetectionTime = 0;
 
     Team(PApplet parent, int color, PVector basePos, PVector baseSize) {
         this.parent = parent;
@@ -47,6 +52,9 @@ class Team {
         for (TankAgent agent : agents) {
             agent.update();
         }
+
+        if(enemyBaseDetected)
+            explorationManager.enemyDetected = true;
     }
 
     void toggleAutoExplore() {
@@ -61,6 +69,32 @@ class Team {
     float getExplorationPercent() {
         return explorationManager.exploredPercent;
     }
+    void reportEnemyBaseDetection(PVector tankPos, String reportingTank) {
+        if (!enemyBaseDetected) { // Only trigger once
+            detectionPosition = tankPos.copy();  // Store tank's position
+            explorationManager.detectedEnemyBase = detectionPosition;
+            // Calculate actual enemy base center for reference
+            if (parent instanceof tanks_bas_v1_0) {
+                tanks_bas_v1_0 game = (tanks_bas_v1_0) parent;
+                // Determine which enemy base was detected based on tank color
+                if (teamColor == game.team0.teamColor) {
+                    // We're team0, so enemy is team1
+                    detectedEnemyBase = PVector.add(game.team1.basePosition, PVector.mult(game.team1.baseSize, 0.5f));
+                } else {
+                    // We're team1, so enemy is team0
+                    detectedEnemyBase = PVector.add(game.team0.basePosition, PVector.mult(game.team0.baseSize, 0.5f));
+                }
+            }
+
+            enemyBaseDetected = true;
+            enemyDetectionTime = parent.millis();
+
+            parent.println("TEAM ALERT: " + reportingTank + " spotted enemy base from position " + tankPos);
+            parent.println("Enemy base located at: " + detectedEnemyBase);
+
+            explorationManager.returnAllHome();
+        }
+    }
 
     void displayHomeBase() {
         parent.strokeWeight(1);
@@ -74,4 +108,5 @@ class Team {
         // Display the shared exploration graph
         explorationManager.display();
     }
+
 }

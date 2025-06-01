@@ -122,11 +122,10 @@ public class TankAgent {
                     break;
 
                 case BASE:
-                    //ADD NODE
-                    //sätt nod till enemyBase/position
-
-                    //explorationManager.returnAllHome();
-                    //stäng av autoexploration (när alla är hemma (efter returnAllHome)
+                    if (parent instanceof tanks_bas_v1_0) {
+                        tanks_bas_v1_0 game = (tanks_bas_v1_0) parent;
+                        game.team0.reportEnemyBaseDetection(detection.position, tank.name);
+                    }
                     break;
 
                 case BORDER:

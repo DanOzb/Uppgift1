@@ -110,29 +110,37 @@ class Sensor {
             }
         }
 
+
+
         // Check for base detections
         if (parent instanceof tanks_bas_v1_0) {
             tanks_bas_v1_0 game = (tanks_bas_v1_0) parent;
-            // Add logic to detect bases
-            // This will depend on how bases are defined in your game
-            // For now, we'll use the base positions and sizes from the Team class
 
             // Detect team0 base
             if (lineRectIntersection(start, end, game.team0.basePosition, game.team0.baseSize)) {
-                PVector baseCenter = PVector.add(game.team0.basePosition, PVector.mult(game.team0.baseSize, 0.5f));
                 SensorDetection.ObjectType type = (tank.col == game.team0.teamColor) ?
                         SensorDetection.ObjectType.FRIEND :
                         SensorDetection.ObjectType.BASE;
-                detections.add(new SensorDetection(baseCenter.copy(), type, game.team0));
-            }
 
+                // Use tank's position for enemy bases, base center for friendly bases
+                PVector detectionPos = (type == SensorDetection.ObjectType.BASE) ?
+                        tank.position.copy() :
+                        PVector.add(game.team0.basePosition, PVector.mult(game.team0.baseSize, 0.5f));
+
+                detections.add(new SensorDetection(detectionPos, type, game.team0));
+            }
             // Detect team1 base
             if (lineRectIntersection(start, end, game.team1.basePosition, game.team1.baseSize)) {
-                PVector baseCenter = PVector.add(game.team1.basePosition, PVector.mult(game.team1.baseSize, 0.5f));
                 SensorDetection.ObjectType type = (tank.col == game.team1.teamColor) ?
                         SensorDetection.ObjectType.FRIEND :
                         SensorDetection.ObjectType.BASE;
-                detections.add(new SensorDetection(baseCenter.copy(), type, game.team1));
+
+                // Use tank's position for enemy bases, base center for friendly bases
+                PVector detectionPos = (type == SensorDetection.ObjectType.BASE) ?
+                        tank.position.copy() :
+                        PVector.add(game.team1.basePosition, PVector.mult(game.team1.baseSize, 0.5f));
+
+                detections.add(new SensorDetection(detectionPos, type, game.team1));
             }
         }
         visualize(detections);

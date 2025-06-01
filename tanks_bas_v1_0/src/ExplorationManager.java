@@ -46,6 +46,8 @@ class ExplorationManager {
     HashMap<Tank, Integer> startPositionCounters;
 
     boolean testDijkstra;
+    boolean enemyDetected = false;
+    PVector detectedEnemyBase = null;
 
     ArrayList<PVector> pathToEnemyBase;
 
@@ -107,7 +109,7 @@ class ExplorationManager {
                         e.printStackTrace();
                     } finally {
                         for (Tank tank : tanks) {
-                            navStates.put(tank, NavigationState.EXPLORING);
+                            navStates.put(tank, NavigationState.POSITION_AROUND_ENEMY_BASE);
                         }
                         if(!isAutoExploreActive()) {
                             toggleAutoExplore();
@@ -117,6 +119,10 @@ class ExplorationManager {
             }
         });
         initializeFog();
+
+        for(Tank tank : tanks) {
+            navStates.put(tank, NavigationState.EXPLORING);
+        }
     }
 
     /**
@@ -325,9 +331,11 @@ class ExplorationManager {
      */
     Node addNode(float x, float y) {
         // Check if a node already exists nearby
-        for (Node existingNode : nodes) {
-            if (PVector.dist(existingNode.position, new PVector(x, y)) < minNodeDistance) {
-                return existingNode;
+        if (!enemyDetected){
+            for (Node existingNode : nodes) {
+                if (PVector.dist(existingNode.position, new PVector(x, y)) < minNodeDistance) {
+                    return existingNode;
+                }
             }
         }
 
@@ -418,6 +426,9 @@ class ExplorationManager {
      */
     void toggleAutoExplore() {
         autoExplore = !autoExplore;
+
+
+
         if (autoExplore) {
             parent.println("Auto-exploration enabled");
             for (Tank tank : tanks) {
@@ -440,16 +451,14 @@ class ExplorationManager {
         if (!autoExplore) return;
 
         if(areAllTanksHome()){
-            if(isAutoExploreActive()) {toggleAutoExplore();}
-            if(!threadInstane.isAlive())
-                threadInstane.start();
+            if (enemyDetected) {
+                startCoordinatedAttack(detectedEnemyBase);
+            }
         }else {
             for (Tank tank : tanks) {
                 navigateTank(tank);
             }
         }
-
-
     }
 
     /**
@@ -522,6 +531,33 @@ class ExplorationManager {
                 break;
 
             case POSITION_AROUND_ENEMY_BASE:
+                threadInstane.interrupt();
+                if(!isAutoExploreActive()) {
+                    toggleAutoExplore();
+                }
+                tank.navState = "Positioning for Attack";
+                targetNode = targetNodes.get(tank);
+                path = paths.get(tank);
+                startPositionCounter = startPositionCounters.get(tank);
+
+                if (targetNode != null && PVector.dist(tank.position, targetNode.position) < 20) {
+                    //targetnode har inte uppdaterats på 3s, findclosestnode -> a*
+                    if (!path.isEmpty()) {
+                        path.remove(0);
+                    }
+                    if (!path.isEmpty()) {
+                        PVector nextPos = path.get(0);
+                        Node nextNode = findClosestNode(nextPos);
+                        if (nextNode != null) {
+                            targetNodes.put(tank, nextNode);
+                        }
+                    }
+                }
+                if (targetNode != null) {
+                    System.out.println("is it here?");
+                    moveTowardTarget(tank);
+                }
+                startPositionCounters.put(tank, startPositionCounter);
                 break;
         }
     }
@@ -826,15 +862,24 @@ class ExplorationManager {
     }
 
     boolean areAllTanksHome(){
+        if(enemyDetected){
+            System.out.println(enemyDetected);
+            int count = 0;
+            for(Tank tank : tanks){
+                if(Math.abs(baseNodes.get(tank).position.x - tank.position.x) < 5 && Math.abs(baseNodes.get(tank).position.y- tank.position.y) < 5) {
+                    count++;
+                }
+            }
+            return count == tanks.size();
+        }
+
         for(Tank tank : tanks) {
             if(navStates.get(tank) != NavigationState.RETURNING_HOME) {
                 return false;
             }
-            if(!(Math.abs(baseNodes.get(tank).position.x - tank.position.x) < 5 && Math.abs(baseNodes.get(tank).position.y- tank.position.y) < 5)) {
-                return false;
-            }
+
         }
-        return true;
+        return false;
     }
 
     /**
@@ -1168,5 +1213,67 @@ class ExplorationManager {
     public boolean isReturningHome(Tank tank) {
         NavigationState state = navStates.get(tank);
         return state == NavigationState.RETURNING_HOME || state == NavigationState.WAITING_AT_HOME;
+    }
+
+    void startCoordinatedAttack(PVector enemyBasePos) {
+        parent.println("=== COORDINATED ATTACK INITIATED ===");
+        parent.println("Target: " + enemyBasePos);
+
+        // Assign roles and positions to each tank
+        for (int i = 0; i < tanks.size() && i < 3; i++) {
+                Tank tank = tanks.get(i);
+                PVector attackPosition = calculateAttackPosition(enemyBasePos, i);
+
+                // Create attack node and set as target
+                Node attackNode = addNode(attackPosition.x, attackPosition.y);
+                targetNodes.put(tank, attackNode);
+                navStates.put(tank, NavigationState.POSITION_AROUND_ENEMY_BASE);
+                ArrayList<PVector> path = new ArrayList<>();
+                for(Node node : aStar(baseNodes.get(tank), attackNode)){
+                    path.add(node.position.copy());
+                }
+                paths.put(tank, path);
+                parent.println(tank.name + " assigned to position: " + attackPosition);
+        }
+    }
+
+    PVector calculateAttackPosition(PVector enemyBase, int tankIndex) {
+        float safeDistance = 100;
+
+        // Get the detection position for more varied attack angles
+        PVector detectionPos = null;
+        if (parent instanceof tanks_bas_v1_0) {
+            tanks_bas_v1_0 game = (tanks_bas_v1_0) parent;
+            detectionPos = game.team0.detectionPosition;
+        }
+
+        if (detectionPos != null) {
+            // Calculate angles based on the direction from detection position to enemy base
+            PVector detectionToEnemy = PVector.sub(enemyBase, detectionPos);
+            float baseAngle = PApplet.atan2(detectionToEnemy.y, detectionToEnemy.x);
+
+            // Spread tanks around the detection angle
+            float[] angleOffsets = {0, PApplet.radians(-45), PApplet.radians(45)}; // Center, left, right
+            float angle = baseAngle + angleOffsets[tankIndex % 3];
+
+            float x = enemyBase.x + safeDistance * PApplet.cos(angle);
+            float y = enemyBase.y + safeDistance * PApplet.sin(angle);
+
+            x = PApplet.constrain(x, 50, parent.width - 50);
+            y = PApplet.constrain(y, 50, parent.height - 50);
+
+            return new PVector(x, y);
+        } else {
+            // Fallback to original method
+            float[] angles = {180, 135, 225};
+            float angle = PApplet.radians(angles[tankIndex % 3]);
+            float x = enemyBase.x + safeDistance * PApplet.cos(angle);
+            float y = enemyBase.y + safeDistance * PApplet.sin(angle);
+
+            x = PApplet.constrain(x, 50, parent.width - 50);
+            y = PApplet.constrain(y, 50, parent.height - 50);
+
+            return new PVector(x, y);
+        }
     }
 }
