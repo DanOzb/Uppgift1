@@ -70,29 +70,28 @@ class Team {
         return explorationManager.exploredPercent;
     }
     void reportEnemyBaseDetection(PVector tankPos, String reportingTank) {
-        if (!enemyBaseDetected) { // Only trigger once
-            detectionPosition = tankPos.copy();  // Store tank's position
+        if (!enemyBaseDetected) {
+            detectionPosition = tankPos.copy();
             explorationManager.detectedEnemyBase = detectionPosition;
-            // Calculate actual enemy base center for reference
+
             if (parent instanceof tanks_bas_v1_0) {
                 tanks_bas_v1_0 game = (tanks_bas_v1_0) parent;
-                // Determine which enemy base was detected based on tank color
                 if (teamColor == game.team0.teamColor) {
-                    // We're team0, so enemy is team1
                     detectedEnemyBase = PVector.add(game.team1.basePosition, PVector.mult(game.team1.baseSize, 0.5f));
                 } else {
-                    // We're team1, so enemy is team0
                     detectedEnemyBase = PVector.add(game.team0.basePosition, PVector.mult(game.team0.baseSize, 0.5f));
                 }
             }
 
             enemyBaseDetected = true;
             enemyDetectionTime = parent.millis();
+            explorationManager.enemyDetected = true; // SET THIS FLAG
 
             parent.println("TEAM ALERT: " + reportingTank + " spotted enemy base from position " + tankPos);
             parent.println("Enemy base located at: " + detectedEnemyBase);
 
             explorationManager.returnAllHome();
+
         }
     }
 

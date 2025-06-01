@@ -99,28 +99,29 @@ class ExplorationManager {
         this.testDijkstra = false;
 
         threadInstane = new Thread(() -> {
-            while(true) {
+
+            while(!Thread.currentThread().isInterrupted()) {
                 if(areAllTanksHome()){
                     try {
                         System.out.println("passed");
                         Thread.sleep(3000);
 
-                    }catch (InterruptedException e){
-                        e.printStackTrace();
-                    } finally {
                         for (Tank tank : tanks) {
                             navStates.put(tank, NavigationState.POSITION_AROUND_ENEMY_BASE);
                         }
                         if(!isAutoExploreActive()) {
                             toggleAutoExplore();
                         }
+                    }catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        break;
                     }
                 }
             }
         });
-        initializeFog();
 
-        for(Tank tank : tanks) {
+        initializeFog();
+        for (Tank tank : tanks) {
             navStates.put(tank, NavigationState.EXPLORING);
         }
     }
@@ -477,8 +478,27 @@ class ExplorationManager {
                 ArrayList<PVector> path = paths.get(tank);
                 int startPositionCounter = startPositionCounters.get(tank);
 
+                // Check if tank has reached home base
+                Node tankBaseNode = baseNodes.get(tank);
+                if (tankBaseNode != null &&
+                        Math.abs(tankBaseNode.position.x - tank.position.x) < 5 &&
+                        Math.abs(tankBaseNode.position.y - tank.position.y) < 5) {
+
+                    // Tank has reached home - set to waiting state
+                    navStates.put(tank, NavigationState.WAITING_AT_HOME);
+                    targetNodes.put(tank, null);
+                    tank.state = 0; // Stop moving
+                    tank.navState = "Waiting at Home";
+
+                    // Record arrival time
+                    if (!homeArrivalTime.containsKey(tank) || homeArrivalTime.get(tank) == 0L) {
+                        homeArrivalTime.put(tank, System.currentTimeMillis());
+                    }
+                    return; // Exit early
+                }
+
+                // Continue with existing RETURNING_HOME logic...
                 if (targetNode != null && PVector.dist(tank.position, targetNode.position) < 20) {
-                    //targetnode har inte uppdaterats på 3s, findclosestnode -> a*
                     if (!path.isEmpty()) {
                         path.remove(0);
                     }
@@ -502,7 +522,7 @@ class ExplorationManager {
                 targetNode = targetNodes.get(tank);
 
                 if (targetNode == null || PVector.dist(tank.position, targetNode.position) < 20) {
-                    if(navStates.get(tank) == NavigationState.RETURNING_HOME){
+                    if (navStates.get(tank) == NavigationState.RETURNING_HOME) {
                         return;
                     }
                     targetNode = selectExplorationTarget(tank);
@@ -541,25 +561,34 @@ class ExplorationManager {
                 startPositionCounter = startPositionCounters.get(tank);
 
                 if (targetNode != null && PVector.dist(tank.position, targetNode.position) < 20) {
-                    //targetnode har inte uppdaterats på 3s, findclosestnode -> a*
                     if (!path.isEmpty()) {
                         path.remove(0);
                     }
+
                     if (!path.isEmpty()) {
                         PVector nextPos = path.get(0);
                         Node nextNode = findClosestNode(nextPos);
                         if (nextNode != null) {
                             targetNodes.put(tank, nextNode);
                         }
+                    } else {
+                        targetNodes.put(tank, null);
                     }
                 }
+
                 if (targetNode != null) {
-                    System.out.println("is it here?");
                     moveTowardTarget(tank);
                 }
                 startPositionCounters.put(tank, startPositionCounter);
                 break;
+
+            case WAITING_AT_HOME:
+                tank.navState = "Waiting at Home";
+                tank.state = 0; // Keep tank stationary
+                // Tank stays in this state until the thread changes it to POSITION_AROUND_ENEMY_BASE
+                break;
         }
+
     }
 
     void recalculatePathFromCurrentPosition(Tank tank) {
@@ -862,24 +891,19 @@ class ExplorationManager {
     }
 
     boolean areAllTanksHome(){
-        if(enemyDetected){
-            System.out.println(enemyDetected);
-            int count = 0;
-            for(Tank tank : tanks){
-                if(Math.abs(baseNodes.get(tank).position.x - tank.position.x) < 5 && Math.abs(baseNodes.get(tank).position.y- tank.position.y) < 5) {
-                    count++;
-                }
+        // First check if all tanks are actually at their home positions
+        int tanksAtHome = 0;
+        for(Tank tank : tanks){
+            Node baseNode = baseNodes.get(tank);
+            if (baseNode != null &&
+                    Math.abs(baseNode.position.x - tank.position.x) < 5 &&
+                    Math.abs(baseNode.position.y - tank.position.y) < 5) {
+                tanksAtHome++;
             }
-            return count == tanks.size();
         }
 
-        for(Tank tank : tanks) {
-            if(navStates.get(tank) != NavigationState.RETURNING_HOME) {
-                return false;
-            }
-
-        }
-        return false;
+        // Only return true if ALL tanks are physically at home AND enemy has been detected
+        return (tanksAtHome == tanks.size()) && enemyDetected;
     }
 
     /**
@@ -1223,16 +1247,23 @@ class ExplorationManager {
         for (int i = 0; i < tanks.size() && i < 3; i++) {
                 Tank tank = tanks.get(i);
                 PVector attackPosition = calculateAttackPosition(enemyBasePos, i);
+            Node attackNode = addNode(attackPosition.x, attackPosition.y);
+            navStates.put(tank, NavigationState.POSITION_AROUND_ENEMY_BASE);
+            ArrayList<PVector> path = new ArrayList<>();
+            for(Node node : aStar(baseNodes.get(tank), attackNode)){
+                path.add(node.position.copy());
+            }
+            paths.put(tank, path);
 
-                // Create attack node and set as target
-                Node attackNode = addNode(attackPosition.x, attackPosition.y);
-                targetNodes.put(tank, attackNode);
-                navStates.put(tank, NavigationState.POSITION_AROUND_ENEMY_BASE);
-                ArrayList<PVector> path = new ArrayList<>();
-                for(Node node : aStar(baseNodes.get(tank), attackNode)){
-                    path.add(node.position.copy());
+            if (!path.isEmpty()) {
+                PVector firstWaypoint = path.get(0);
+                Node firstNode = findClosestNode(firstWaypoint);
+                if (firstNode != null) {
+                    targetNodes.put(tank, firstNode);
                 }
-                paths.put(tank, path);
+            } else {
+                targetNodes.put(tank, attackNode); // Fallback if no path found
+            }
                 parent.println(tank.name + " assigned to position: " + attackPosition);
         }
     }
@@ -1265,7 +1296,7 @@ class ExplorationManager {
             return new PVector(x, y);
         } else {
             // Fallback to original method
-            float[] angles = {180, 135, 225};
+            float[] angles = {-180, 135, 225};
             float angle = PApplet.radians(angles[tankIndex % 3]);
             float x = enemyBase.x + safeDistance * PApplet.cos(angle);
             float y = enemyBase.y + safeDistance * PApplet.sin(angle);
