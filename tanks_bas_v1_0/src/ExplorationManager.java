@@ -38,7 +38,6 @@ class ExplorationManager {
     HashMap<Tank, Long> lastTargetUpdateTime;
     HashMap<Tank, Long> homeArrivalTime; // Track when each tank arrived home
     Long allTanksHomeTime;
-    int tankHomeCounter;
 
     int clearedPixels;
     int totalPixels;
@@ -918,8 +917,8 @@ class ExplorationManager {
             return true; // Team 0 (red) base
         }
 
-        if (position.x >= parent.width - 151 && position.x <= parent.width &&
-                position.y >= parent.height - 351 && position.y <= parent.height) {
+        if (position.x >= parent.width - 100 && position.x <= parent.width &&
+                position.y >= parent.height - 400 && position.y <= parent.height) {
             return true; // Team 1 (blue) base
         }
 
@@ -1242,7 +1241,29 @@ class ExplorationManager {
     void startCoordinatedAttack(PVector enemyBasePos) {
         parent.println("=== COORDINATED ATTACK INITIATED ===");
         parent.println("Target: " + enemyBasePos);
+        /*
+        for (int i = 0; i < tanks.size() && i < 3; i++) {
+            Tank tank = tanks.get(i);
+            Node attackNode = addNode(enemyBasePos.x, enemyBasePos.y + (20 * i));
+            navStates.put(tank, NavigationState.POSITION_AROUND_ENEMY_BASE);
+            ArrayList<PVector> path = new ArrayList<>();
+            for(Node node : aStar(baseNodes.get(tank), attackNode)){
+                path.add(node.position.copy());
+            }
+            paths.put(tank, path);
 
+            if (!path.isEmpty()) {
+                PVector firstWaypoint = path.get(0);
+                Node firstNode = findClosestNode(firstWaypoint);
+                if (firstNode != null) {
+                    targetNodes.put(tank, firstNode);
+                }
+            } else {
+                targetNodes.put(tank, attackNode); // Fallback if no path found
+            }
+            parent.println(tank.name + " assigned to position: ");
+        }
+        */
         // Assign roles and positions to each tank
         for (int i = 0; i < tanks.size() && i < 3; i++) {
                 Tank tank = tanks.get(i);
@@ -1269,7 +1290,7 @@ class ExplorationManager {
     }
 
     PVector calculateAttackPosition(PVector enemyBase, int tankIndex) {
-        float safeDistance = 100;
+        float safeDistance = 75;
 
         // Get the detection position for more varied attack angles
         PVector detectionPos = null;
@@ -1296,7 +1317,7 @@ class ExplorationManager {
             return new PVector(x, y);
         } else {
             // Fallback to original method
-            float[] angles = {-180, 135, 225};
+            float[] angles = {180, 90, 270};
             float angle = PApplet.radians(angles[tankIndex % 3]);
             float x = enemyBase.x + safeDistance * PApplet.cos(angle);
             float y = enemyBase.y + safeDistance * PApplet.sin(angle);

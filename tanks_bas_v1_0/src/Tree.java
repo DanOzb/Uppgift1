@@ -24,7 +24,7 @@ class Tree {
     Tree(PApplet parent, PImage _image, float _posx, float _posy) {
         this.parent = parent;
         this.img       = _image;
-        this.diameter  = this.img.width/2;
+        this.diameter  = this.img.width*0.7f;
         this.name      = "tree";
         this.position  = new PVector(_posx, _posy);
 

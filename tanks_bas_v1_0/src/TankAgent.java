@@ -13,8 +13,9 @@ public class TankAgent {
     enum AgentState {
         EXPLORING,
         ATTACKING,
-        DEFENDING,
-        RETURNING_HOME
+        DEFENDING, // Wanted to create tanks that patrol and defend their base, but would take too much time.
+        RETURNING_HOME,
+
     }
 
     AgentState currentState;
@@ -70,7 +71,8 @@ public class TankAgent {
             public void handleEnemyBaseCollision(Tank collidedTank) {
                 if (collidedTank == tank) {
                     System.out.println("Tank " + tank.name + " collided with enemy base");
-                    explorationManager.returnAllHome();
+                    //explorationManager.returnAllHome();
+                    //TODO: reposition kanske around enemy base?
                 }
             }
             @Override
@@ -106,8 +108,7 @@ public class TankAgent {
             switch (detection.type) {
                 case ENEMY:
                     enemyDetected = true;
-                    // Handle enemy detection logic
-                    // For example, change state to ATTACKING if appropriate
+
                     if (currentState == AgentState.EXPLORING) {
                         //do something
                     }
@@ -124,7 +125,7 @@ public class TankAgent {
                 case BASE:
                     if (parent instanceof tanks_bas_v1_0) {
                         tanks_bas_v1_0 game = (tanks_bas_v1_0) parent;
-                        game.team0.reportEnemyBaseDetection(detection.position, tank.name);
+                        game.team0.reportEnemyBaseDetection(detection.position, tank);
                     }
                     break;
 
@@ -134,6 +135,7 @@ public class TankAgent {
                         borderCollisionHandle();
                     }
                     break;
+
             }
         }
         if (currentState == AgentState.EXPLORING && treeInWay) {
@@ -152,13 +154,11 @@ public class TankAgent {
             );
 
             // Process detections - look for enemies
-            boolean enemyInSight = false;
             for (SensorDetection detection : detections) {
                 if (detection.type == SensorDetection.ObjectType.ENEMY) {
                     // Enemy detected - determine if we should attack
                     float distance = PVector.dist(tank.position, detection.position);
                     if (distance < 200) { // Within attack range
-                        enemyInSight = true;
                         currentState = AgentState.ATTACKING;
 
                         // Face the enemy
@@ -170,11 +170,6 @@ public class TankAgent {
                         break;
                     }
                 }
-            }
-
-            // If no enemies in sight and we were attacking, go back to exploring
-            if (!enemyInSight && currentState == AgentState.ATTACKING) {
-                currentState = AgentState.EXPLORING;
             }
         }
     }

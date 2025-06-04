@@ -67,7 +67,7 @@ class Tank {
 
         this.fieldOfView = 100.0f;
 
-        this.losSensor = new Sensor(parent, this, 80.0f, PApplet.radians(45));
+        this.losSensor = new Sensor(parent, this, 100.0f, PApplet.radians(45));
 
         this.projectile = new Projectile(parent, this);
 
@@ -107,18 +107,8 @@ class Tank {
 
         // Calculate firing direction based on tank state
         PVector direction = new PVector();
-        switch (state) {
-            case 0: direction.set(1, 0); break; // Default right when stationary
-            case 1: direction.set(1, 0); break; // Right
-            case 2: direction.set(-1, 0); break; // Left
-            case 3: direction.set(0, 1); break; // Down
-            case 4: direction.set(0, -1); break; // Up
-            case 5: direction.set(1, 1); break; // Right+Down
-            case 6: direction.set(1, -1); break; // Right+Up
-            case 7: direction.set(-1, 1); break; // Left+Down
-            case 8: direction.set(-1, -1); break; // Left+Up
-        }
 
+        direction.set(this.velocity);
         direction.normalize();
 
         // Calculate starting position at the end of the cannon
