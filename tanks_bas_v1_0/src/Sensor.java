@@ -110,8 +110,6 @@ class Sensor {
             }
         }
 
-
-
         // Check for base detections
         if (parent instanceof tanks_bas_v1_0) {
             tanks_bas_v1_0 game = (tanks_bas_v1_0) parent;
@@ -351,15 +349,38 @@ class Sensor {
 
     /**
      * Draws the sensor's line of sight for visualization.
+     * Shows red visualization when tank is locked onto a target.
      */
     void visualize(ArrayList<SensorDetection> detections) {
         PVector direction = getTankDirection();
         PVector start = tank.position.copy();
 
-        // Draw the line of sight ray
+        // Check if this tank is locked onto a target (need to access the tank agent)
+        boolean isLockedOn = false;
+        Tank lockedTarget = null;
+
+        // Check if tank is locked on by accessing the game and finding the tank agent
+        if (parent instanceof tanks_bas_v1_0) {
+            tanks_bas_v1_0 game = (tanks_bas_v1_0) parent;
+            for (TankAgent agent : game.team0.agents) {
+                if (agent.tank == this.tank && agent.isLockedOn()) {
+                    isLockedOn = true;
+                    lockedTarget = agent.getLockedTarget();
+                    break;
+                }
+            }
+        }
+
         parent.pushMatrix();
-        parent.stroke(255, 255, 0, 150);
-        parent.strokeWeight(2);
+
+        // Set stroke color based on lock-on status
+        if (isLockedOn) {
+            parent.stroke(255, 0, 0, 200); // Bright red for locked on
+            parent.strokeWeight(3);
+        } else {
+            parent.stroke(255, 255, 0, 150); // Yellow for normal
+            parent.strokeWeight(2);
+        }
 
         if (detections.isEmpty()) {
             // No detections, draw full ray
@@ -379,34 +400,48 @@ class Sensor {
             }
 
             if (closest != null) {
-                // Draw ray to the closest object
                 parent.line(start.x, start.y, closest.position.x, closest.position.y);
 
-                // Draw circle to indicate the detected object
                 parent.noFill();
-                switch(closest.type) {
-                    case FRIEND:
-                        parent.stroke(0, 255, 0, 200);
-                        break;
-                    case ENEMY:
-                        parent.stroke(255, 0, 0, 200);
-                        break;
-                    case TREE:
-                        parent.stroke(0, 150, 0, 200);
-                        break;
-                    case BORDER:
-                        parent.stroke(150, 150, 150, 200);
-                        break;
-                    case BASE:
-                        parent.stroke(0, 0, 255, 200);
-                        break;
+
+                if (isLockedOn && closest.type == SensorDetection.ObjectType.ENEMY &&
+                        closest.object == lockedTarget) {
+                    parent.stroke(255, 0, 0, 255);
+                    parent.strokeWeight(4);
+                    // Draw crosshairs on the locked target
+                    parent.ellipse(closest.position.x, closest.position.y, 30, 30);
+                    parent.line(closest.position.x - 15, closest.position.y, closest.position.x + 15, closest.position.y);
+                    parent.line(closest.position.x, closest.position.y - 15, closest.position.x, closest.position.y + 15);
+                } else {
+                    switch(closest.type) {
+                        case FRIEND:
+                            parent.stroke(0, 255, 0, 200);
+                            break;
+                        case ENEMY:
+                            parent.stroke(255, 0, 0, 200);
+                            break;
+                        case TREE:
+                            parent.stroke(0, 150, 0, 200);
+                            break;
+                        case BORDER:
+                            parent.stroke(150, 150, 150, 200);
+                            break;
+                        case BASE:
+                            parent.stroke(0, 0, 255, 200);
+                            break;
+                    }
+                    parent.ellipse(closest.position.x, closest.position.y, 20, 20);
                 }
-                parent.ellipse(closest.position.x, closest.position.y, 20, 20);
 
                 // Draw a label for the detected object
                 parent.fill(0);
                 parent.textSize(12);
-                parent.text(closest.type.toString(), closest.position.x + 15, closest.position.y);
+                String label = closest.type.toString();
+                if (isLockedOn && closest.type == SensorDetection.ObjectType.ENEMY &&
+                        closest.object == lockedTarget) {
+                    label = "LOCKED: " + ((Tank)closest.object).name;
+                }
+                parent.text(label, closest.position.x + 15, closest.position.y);
             }
         }
 

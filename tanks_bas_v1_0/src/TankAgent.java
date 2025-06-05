@@ -10,12 +10,16 @@ public class TankAgent {
 
     ArrayList<SensorDetection> lastSensorDetections;
 
+    // Lock-on system
+    Tank lockedTarget = null;
+    boolean isLockedOn = false;
+
     enum AgentState {
         EXPLORING,
         ATTACKING,
         DEFENDING, // Wanted to create tanks that patrol and defend their base, but would take too much time.
         RETURNING_HOME,
-
+        LOCKED_ON // New state for lock-on functionality
     }
 
     AgentState currentState;
@@ -35,7 +39,6 @@ public class TankAgent {
 
         this.lastSensorDetections = new ArrayList<>();
     }
-
 
     void setupCollisionHandler(Collisions collisions) {
         collisions.setCollisionHandler(new CollisionHandler() {
@@ -109,6 +112,18 @@ public class TankAgent {
                 case ENEMY:
                     enemyDetected = true;
 
+                    // Check if we're positioned around enemy base and should lock on
+                    ExplorationManager.NavigationState navState = explorationManager.navStates.get(tank);
+                    if (navState == ExplorationManager.NavigationState.POSITION_AROUND_ENEMY_BASE && !isLockedOn) {
+                        // Lock onto the first enemy tank detected
+                        if (detection.object instanceof Tank) {
+                            lockedTarget = (Tank) detection.object;
+                            isLockedOn = true;
+                            currentState = AgentState.LOCKED_ON;
+                            parent.println(tank.name + " LOCKED ONTO TARGET: " + lockedTarget.name);
+                        }
+                    }
+
                     if (currentState == AgentState.EXPLORING) {
                         //do something
                     }
@@ -135,30 +150,38 @@ public class TankAgent {
                         borderCollisionHandle();
                     }
                     break;
-
             }
         }
+
         if (currentState == AgentState.EXPLORING && treeInWay) {
             // Try to find a clearer path
             explorationManager.expandRRT(tank);
         }
     }
 
-
     void update() {
-        // Determine if we should shoot based on sensor data
+        // Handle lock-on behavior
+        if (currentState == AgentState.LOCKED_ON && isLockedOn && lockedTarget != null) {
+            faceTarget(lockedTarget);
+
+            tank.state = 0;
+
+            tank.navState = "LOCKED ON: " + lockedTarget.name;
+
+            return;
+        }
+
         if (!tank.isDestroyed && explorationManager.isAutoExploreActive()) {
             ArrayList<SensorDetection> detections = tank.scan(
                     ((tanks_bas_v1_0)parent).allTanks,
                     ((tanks_bas_v1_0)parent).allTrees
             );
 
-            // Process detections - look for enemies
             for (SensorDetection detection : detections) {
                 if (detection.type == SensorDetection.ObjectType.ENEMY) {
                     // Enemy detected - determine if we should attack
                     float distance = PVector.dist(tank.position, detection.position);
-                    if (distance < 200) { // Within attack range
+                    if (distance < 450) { // Within attack range
                         currentState = AgentState.ATTACKING;
 
                         // Face the enemy
@@ -172,6 +195,13 @@ public class TankAgent {
                 }
             }
         }
+    }
+
+    private void faceTarget(Tank target) {
+        if (target == null) return;
+
+        PVector direction = PVector.sub(target.position, tank.position);
+        faceDirection(direction);
     }
 
     private void faceDirection(PVector direction) {
@@ -196,6 +226,16 @@ public class TankAgent {
         }
     }
 
+    // Method to check if this agent is locked on (for visual feedback)
+    public boolean isLockedOn() {
+        return isLockedOn && currentState == AgentState.LOCKED_ON;
+    }
+
+    // Method to get the locked target (for visual feedback)
+    public Tank getLockedTarget() {
+        return lockedTarget;
+    }
+
     void borderCollisionHandle() {
         parent.println("Border collision detected - adjusting navigation");
 
@@ -207,8 +247,8 @@ public class TankAgent {
         ExplorationManager.NavigationState navState = explorationManager.navStates.get(tank);
         Node targetNode = explorationManager.targetNodes.get(tank);
 
-        // Don't handle border collisions if tank is waiting at home
-        if (navState == ExplorationManager.NavigationState.WAITING_AT_HOME) {
+        // Don't handle border collisions if tank is waiting at home or locked on
+        if (navState == ExplorationManager.NavigationState.WAITING_AT_HOME || currentState == AgentState.LOCKED_ON) {
             return;
         }
 
