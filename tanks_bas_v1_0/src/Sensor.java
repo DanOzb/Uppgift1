@@ -33,13 +33,13 @@ class Sensor {
     PApplet parent;
     Tank tank;
     float maxViewDistance;
-    float viewAngle; // Field of view angle in radians
+    float radianViewAngle; // Field of view angle in radians
 
     Sensor(PApplet parent, Tank tank, float maxViewDistance, float viewAngle) {
         this.parent = parent;
         this.tank = tank;
         this.maxViewDistance = maxViewDistance;
-        this.viewAngle = viewAngle;
+        this.radianViewAngle = viewAngle;
     }
 
     /**
@@ -135,7 +135,7 @@ class Sensor {
 
                 // Use tank's position for enemy bases, base center for friendly bases
                 PVector detectionPos = (type == SensorDetection.ObjectType.BASE) ?
-                        tank.position.copy() :
+                        end :
                         PVector.add(game.team1.basePosition, PVector.mult(game.team1.baseSize, 0.5f));
 
                 detections.add(new SensorDetection(detectionPos, type, game.team1));
@@ -150,7 +150,7 @@ class Sensor {
      *
      * @return Normalized direction vector
      */
-    private PVector getTankDirection() {
+    PVector getTankDirection() {
         PVector direction = new PVector(0, 0);
 
         switch (tank.state) {

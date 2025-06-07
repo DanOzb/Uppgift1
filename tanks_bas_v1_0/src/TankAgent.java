@@ -112,6 +112,7 @@ public class TankAgent {
                 case ENEMY:
                     enemyDetected = true;
 
+
                     // Check if we're positioned around enemy base and should lock on
                     ExplorationManager.NavigationState navState = explorationManager.navStates.get(tank);
                     if (navState == ExplorationManager.NavigationState.POSITION_AROUND_ENEMY_BASE && !isLockedOn) {

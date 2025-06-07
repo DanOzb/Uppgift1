@@ -138,9 +138,9 @@ public class tanks_bas_v1_0 extends PApplet{
       updateTanksLogic();
       // CHECK FOR COLLISIONS
       checkForCollisions();
-        // Update the team, which now updates the shared exploration manager
-        team0.update();
-      }
+      // Update the team, which now updates the shared exploration manager
+      team0.update();
+    }
     // UPDATE DISPLAY
     team0.displayHomeBase();
     displayTrees();
@@ -203,7 +203,9 @@ public class tanks_bas_v1_0 extends PApplet{
    * Uses the Collisions manager to handle all collision detection and resolution.
    */
   void checkForCollisions() {
-    collisions.checkAllCollisions(allTanks, allTrees);
+    if (collisions != null) {
+      collisions.checkAllCollisions(allTanks, allTrees);
+    }
 
     for (Tank tank : allTanks) {
       if (tank != null) {

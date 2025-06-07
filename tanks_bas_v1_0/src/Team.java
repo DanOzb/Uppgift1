@@ -72,12 +72,11 @@ class Team {
     void reportEnemyBaseDetection(PVector tankPos, Tank reportingTank) {
         if (!enemyBaseDetected) {
 
+
             if (parent instanceof tanks_bas_v1_0) {
                 tanks_bas_v1_0 game = (tanks_bas_v1_0) parent;
                 if (teamColor == game.team0.teamColor) {
-                    explorationManager.detectedEnemyBase = tankPos.copy().mult(tankPos, 1.01f);
-                } else {
-                    explorationManager.detectedEnemyBase = tankPos.copy().mult(tankPos, 1.01f);
+                    explorationManager.detectedEnemyBase = tankPos.copy();
                 }
             }
 

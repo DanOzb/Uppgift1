@@ -47,8 +47,8 @@ class ExplorationManager {
     boolean testDijkstra;
     boolean enemyDetected = false;
     PVector detectedEnemyBase = null;
+    boolean attacking = false;
 
-    ArrayList<PVector> pathToEnemyBase;
 
     enum NavigationState {
         EXPLORING,
@@ -451,8 +451,9 @@ class ExplorationManager {
         if (!autoExplore) return;
 
         if(areAllTanksHome()){
-            if (enemyDetected) {
+            if (enemyDetected && !attacking) {
                 startCoordinatedAttack(detectedEnemyBase);
+
             }
         }else {
             for (Tank tank : tanks) {
@@ -1239,12 +1240,18 @@ class ExplorationManager {
     }
 
     void startCoordinatedAttack(PVector enemyBasePos) {
+        attacking = true;
         parent.println("=== COORDINATED ATTACK INITIATED ===");
         parent.println("Target: " + enemyBasePos);
-        /*
+
         for (int i = 0; i < tanks.size() && i < 3; i++) {
             Tank tank = tanks.get(i);
-            Node attackNode = addNode(enemyBasePos.x, enemyBasePos.y + (20 * i));
+            PVector newPos = PVector.add(enemyBasePos, new PVector(-30, 100 * i));
+            if(newPos.y > 800){
+                newPos = PVector.add(enemyBasePos, new PVector(-30, -100 * i));
+            }
+            Node attackNode = addNode(newPos.x, newPos.y);
+            System.out.println("Start coordinated attack at position: " + attackNode.position);
             navStates.put(tank, NavigationState.POSITION_AROUND_ENEMY_BASE);
             ArrayList<PVector> path = new ArrayList<>();
             for(Node node : aStar(baseNodes.get(tank), attackNode)){
@@ -1263,7 +1270,7 @@ class ExplorationManager {
             }
             parent.println(tank.name + " assigned to position: ");
         }
-        */
+        /*
         // Assign roles and positions to each tank
         for (int i = 0; i < tanks.size() && i < 3; i++) {
                 Tank tank = tanks.get(i);
@@ -1287,6 +1294,8 @@ class ExplorationManager {
             }
                 parent.println(tank.name + " assigned to position: " + attackPosition);
         }
+
+         */
     }
 
     PVector calculateAttackPosition(PVector enemyBase, int tankIndex) {

@@ -48,7 +48,7 @@ public class Collisions {
         float dotProduct = tankDirection.dot(tankToOther);
         float angle = PApplet.acos(dotProduct);
 
-        if (angle > tank.losSensor.viewAngle / 2) {
+        if (angle > tank.losSensor.radianViewAngle / 2) {
             return false; // Not in field of view
         }
 
