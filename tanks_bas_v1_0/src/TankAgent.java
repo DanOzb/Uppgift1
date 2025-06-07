@@ -115,7 +115,7 @@ public class TankAgent {
 
                     // Check if we're positioned around enemy base and should lock on
                     ExplorationManager.NavigationState navState = explorationManager.navStates.get(tank);
-                    if (navState == ExplorationManager.NavigationState.POSITION_AROUND_ENEMY_BASE && !isLockedOn) {
+                    if ((navState == ExplorationManager.NavigationState.POSITION_AROUND_ENEMY_BASE || navState == ExplorationManager.NavigationState.MOVING_TO_TARGET) && !isLockedOn) {
                         // Lock onto the first enemy tank detected
                         if (detection.object instanceof Tank) {
                             lockedTarget = (Tank) detection.object;
@@ -168,8 +168,6 @@ public class TankAgent {
             tank.state = 0;
 
             tank.navState = "LOCKED ON: " + lockedTarget.name;
-
-            return;
         }
 
         if (!tank.isDestroyed && explorationManager.isAutoExploreActive()) {

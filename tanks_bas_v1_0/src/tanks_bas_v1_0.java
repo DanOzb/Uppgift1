@@ -97,9 +97,9 @@ public class tanks_bas_v1_0 extends PApplet{
     tank1 = new Tank(this,"tank1", team0_tank1_startpos,tank_size, team0Color );
     tank2 = new Tank(this,"tank2", team0_tank2_startpos,tank_size, team0Color );
 
-    tank3 = new Tank(this,"tank3", team1_tank0_startpos,tank_size, team1Color );
-    tank4 = new Tank(this,"tank4", team1_tank1_startpos,tank_size, team1Color );
-    tank5 = new Tank(this,"tank5", team1_tank2_startpos,tank_size, team1Color );
+    tank3 = new Tank(this,"tank3", team1_tank0_startpos,100, team1Color );
+    tank4 = new Tank(this,"tank4", team1_tank1_startpos,100, team1Color );
+    tank5 = new Tank(this,"tank5", team1_tank2_startpos,100, team1Color );
 
     allTanks[0] = tank0;
     allTanks[1] = tank1;

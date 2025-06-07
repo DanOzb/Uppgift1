@@ -80,7 +80,7 @@ class Team {
                 }
             }
 
-            enemyBaseDetected = true;
+            setEnemyBaseDetected(true);
             enemyDetectionTime = parent.millis();
             explorationManager.enemyDetected = true; // SET THIS FLAG
 
@@ -92,10 +92,15 @@ class Team {
         }
     }
 
+    public void setBasePosition(PVector pos) {
+        basePosition = pos;
+    }
+
     void displayHomeBase() {
         parent.strokeWeight(1);
         parent.fill(teamColor, 15);
         parent.rect(basePosition.x, basePosition.y, baseSize.x, baseSize.y);
+
     }
 
     void display() {
@@ -103,6 +108,14 @@ class Team {
 
         // Display the shared exploration graph
         explorationManager.display();
+    }
+
+    public void setEnemyBaseDetected(boolean detected) {
+        this.enemyBaseDetected = detected;
+    }
+
+    public boolean getEnemyBaseDetected() {
+        return enemyBaseDetected;
     }
 
 }

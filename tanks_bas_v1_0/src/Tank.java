@@ -67,7 +67,7 @@ class Tank {
 
         this.fieldOfView = 100.0f;
 
-        this.losSensor = new Sensor(parent, this, 100.0f, PApplet.radians(45));
+        this.losSensor = new Sensor(parent, this, 150.0f, PApplet.radians(45));
 
         this.projectile = new Projectile(parent, this);
 

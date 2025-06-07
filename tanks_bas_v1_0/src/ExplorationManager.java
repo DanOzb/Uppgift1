@@ -497,7 +497,6 @@ class ExplorationManager {
                     return; // Exit early
                 }
 
-                // Continue with existing RETURNING_HOME logic...
                 if (targetNode != null && PVector.dist(tank.position, targetNode.position) < 20) {
                     if (!path.isEmpty()) {
                         path.remove(0);
@@ -522,7 +521,7 @@ class ExplorationManager {
                 targetNode = targetNodes.get(tank);
 
                 if (targetNode == null || PVector.dist(tank.position, targetNode.position) < 20) {
-                    if (navStates.get(tank) == NavigationState.RETURNING_HOME) {
+                    if (navStates.get(tank) == NavigationState.RETURNING_HOME || navStates.get(tank) == NavigationState.POSITION_AROUND_ENEMY_BASE) {
                         return;
                     }
                     targetNode = selectExplorationTarget(tank);
@@ -551,10 +550,6 @@ class ExplorationManager {
                 break;
 
             case POSITION_AROUND_ENEMY_BASE:
-                threadInstane.interrupt();
-                if(!isAutoExploreActive()) {
-                    toggleAutoExplore();
-                }
                 tank.navState = "Positioning for Attack";
                 targetNode = targetNodes.get(tank);
                 path = paths.get(tank);
@@ -817,7 +812,7 @@ class ExplorationManager {
             newPos.x = PApplet.constrain(newPos.x, 20, parent.width - 20);
             newPos.y = PApplet.constrain(newPos.y, 20, parent.height - 20);
 
-            if (isValidNodePosition(newPos, tank) && navStates.get(tank) != NavigationState.RETURNING_HOME) {
+            if (isValidNodePosition(newPos, tank) && navStates.get(tank) != NavigationState.RETURNING_HOME && navStates.get(tank) != NavigationState.POSITION_AROUND_ENEMY_BASE) {
                 Node newNode = addNode(newPos.x, newPos.y);
                 targetNodes.put(tank, newNode);
                 navStates.put(tank, NavigationState.MOVING_TO_TARGET);
@@ -1236,7 +1231,7 @@ class ExplorationManager {
      */
     public boolean isReturningHome(Tank tank) {
         NavigationState state = navStates.get(tank);
-        return state == NavigationState.RETURNING_HOME || state == NavigationState.WAITING_AT_HOME;
+        return state == NavigationState.RETURNING_HOME || state == NavigationState.WAITING_AT_HOME || state == NavigationState.POSITION_AROUND_ENEMY_BASE;
     }
 
     void startCoordinatedAttack(PVector enemyBasePos) {

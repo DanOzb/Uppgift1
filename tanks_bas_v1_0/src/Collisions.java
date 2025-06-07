@@ -89,30 +89,30 @@ public class Collisions {
      * @param allTrees Array of Tree objects to check for collisions with tanks
      */
     public void checkAllCollisions(Tank[] allTanks, Tree[] allTrees) {
-        for (Tank tank : allTanks) {
-            if (tank != null) {
-                checkBaseCollisions(tank);
-            }
-        }
-
-        for (int i = 0; i < allTanks.length; i++) {
-            if (allTanks[i] == null) continue;
-
-            for (int j = i + 1; j < allTanks.length; j++) {
-                if (allTanks[j] != null) {
-                    checkTankCollision(allTanks[i], allTanks[j]);
+            for (Tank tank : allTanks) {
+                if (tank != null && !collisionHandler.isReturningHome(tank)) {
+                    checkBaseCollisions(tank);
                 }
             }
 
-            boolean treeCollision = checkTreeCollisions(allTanks[i], allTrees);
+            for (int i = 0; i < allTanks.length; i++) {
+                if (allTanks[i] == null) continue;
 
-            if (treeCollision && collisionHandler != null && !collisionHandler.isReturningHome(allTanks[i])) {
-                // Notify the handler about a persistent tree collision
-                collisionHandler.handleTreeCollision(allTanks[i], null);  // Pass null to indicate a persistent collision
+                for (int j = i + 1; j < allTanks.length; j++) {
+                    if (allTanks[j] != null) {
+                        checkTankCollision(allTanks[i], allTanks[j]);
+                    }
+                }
+
+                boolean treeCollision = checkTreeCollisions(allTanks[i], allTrees);
+
+                if (treeCollision && collisionHandler != null && !collisionHandler.isReturningHome(allTanks[i])) {
+                    // Notify the handler about a persistent tree collision
+                    collisionHandler.handleTreeCollision(allTanks[i], null);  // Pass null to indicate a persistent collision
+                }
+
+                checkBorderCollisions(allTanks[i]);
             }
-
-            checkBorderCollisions(allTanks[i]);
-        }
     }
 
     /**
