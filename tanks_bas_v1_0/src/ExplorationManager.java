@@ -22,6 +22,7 @@ class ExplorationManager {
     HashMap<Tank, Node> currentNodes; // Track current node for each tank
     HashMap<Tank, Node> targetNodes;  // Track target node for each tank
     HashMap<Tank, Node> baseNodes;    // Each tank has its own base node
+    HashMap<Tank, Node> enemyBaseNodes;
     HashMap<Tank, ArrayList<PVector>> paths; // Track path for each tank
     Random random;
 
@@ -48,6 +49,7 @@ class ExplorationManager {
     boolean enemyDetected = false;
     PVector detectedEnemyBase = null;
     boolean attacking = false;
+    boolean combatMode = false;
 
 
     enum NavigationState {
@@ -55,6 +57,8 @@ class ExplorationManager {
         MOVING_TO_TARGET,
         RETURNING_HOME,
         WAITING_AT_HOME,
+        WAITING_OUTSIDE_ENEMY_BASE,
+        ATTACK_MODE,
         POSITION_AROUND_ENEMY_BASE
     }
 
@@ -94,6 +98,7 @@ class ExplorationManager {
         this.lastTargetUpdateTime = new HashMap<Tank, Long>();
         this.homeArrivalTime = new HashMap<Tank, Long>();
         this.allTanksHomeTime = null;
+        enemyBaseNodes = new HashMap<>();
 
         this.testDijkstra = false;
 
@@ -102,11 +107,11 @@ class ExplorationManager {
             while(!Thread.currentThread().isInterrupted()) {
                 if(areAllTanksHome()){
                     try {
-                        System.out.println("passed");
+                        //System.out.println("passed");
                         Thread.sleep(3000);
 
                         for (Tank tank : tanks) {
-                            navStates.put(tank, NavigationState.POSITION_AROUND_ENEMY_BASE);
+                                navStates.put(tank, NavigationState.ATTACK_MODE);
                         }
                         if(!isAutoExploreActive()) {
                             toggleAutoExplore();
@@ -291,8 +296,8 @@ class ExplorationManager {
             parent.println("2");
         }
 
-        if (targetNodes.containsKey(tank) && targetNodes.get(tank) != null && navStates.get(tank) != NavigationState.RETURNING_HOME) {
-            parent.println("IT SHOULDN'T GET HERE");
+
+        if (targetNodes.containsKey(tank) && targetNodes.get(tank) != null && navStates.get(tank) != NavigationState.RETURNING_HOME && navStates.get(tank) != NavigationState.POSITION_AROUND_ENEMY_BASE ) {
             navStates.put(tank, NavigationState.EXPLORING);
             targetNodes.put(tank, null);
         }
@@ -455,6 +460,11 @@ class ExplorationManager {
                 startCoordinatedAttack(detectedEnemyBase);
 
             }
+        }else if(areAllTanksOutsideEnemyBase()){
+            for (Tank tank : tanks) {
+                navStates.put(tank, NavigationState.ATTACK_MODE);
+                navigateTank(tank);
+            }
         }else {
             for (Tank tank : tanks) {
                 navigateTank(tank);
@@ -538,7 +548,6 @@ class ExplorationManager {
                 tank.navState = "MovingToTarget";
                 moveTowardTarget(tank);
                 targetNode = targetNodes.get(tank);
-
                 if (targetNode != null && PVector.dist(tank.position, targetNode.position) < 50) {
                     if (navStates.get(tank) == NavigationState.RETURNING_HOME) {
                         return;
@@ -555,6 +564,24 @@ class ExplorationManager {
                 path = paths.get(tank);
                 startPositionCounter = startPositionCounters.get(tank);
 
+                Node attackNode = enemyBaseNodes.get(tank);
+
+                if(attackNode != null &&
+                        Math.abs(attackNode.position.x - tank.position.x) < 10 &&
+                        Math.abs(attackNode.position.y - tank.position.y) < 10) {
+
+                    // Tank has reached home - set to waiting state
+                    navStates.put(tank, NavigationState.WAITING_OUTSIDE_ENEMY_BASE);
+                    targetNodes.put(tank, null);
+                    tank.state = 0; // Stop moving
+                    tank.navState = "Waiting outside enemy base";
+
+                    if (!homeArrivalTime.containsKey(tank) || homeArrivalTime.get(tank) == 0L) {
+                        homeArrivalTime.put(tank, System.currentTimeMillis());
+                    }
+                    return; // Exit early
+                }
+
                 if (targetNode != null && PVector.dist(tank.position, targetNode.position) < 20) {
                     if (!path.isEmpty()) {
                         path.remove(0);
@@ -566,11 +593,8 @@ class ExplorationManager {
                         if (nextNode != null) {
                             targetNodes.put(tank, nextNode);
                         }
-                    } else {
-                        targetNodes.put(tank, null);
                     }
                 }
-
                 if (targetNode != null) {
                     moveTowardTarget(tank);
                 }
@@ -580,10 +604,26 @@ class ExplorationManager {
             case WAITING_AT_HOME:
                 tank.navState = "Waiting at Home";
                 tank.state = 0; // Keep tank stationary
-                // Tank stays in this state until the thread changes it to POSITION_AROUND_ENEMY_BASE
+                break;
+
+            case WAITING_OUTSIDE_ENEMY_BASE:
+                tank.navState = "WAITING OUTSIDE BASE";
+                tank.state = 0;
+
+                break;
+
+            case ATTACK_MODE:
+                tank.navState = "Attacking";
+                combatMode = true;
+                if(PVector.dist(tank.position, enemyBaseNodes.get(tank).position) > 30) {
+                    targetNodes.put(tank, enemyBaseNodes.get(tank));
+                    moveTowardTarget(tank); //bråkar med den här, den här ändrar states
+                }
+                else if(PVector.dist(tank.position, enemyBaseNodes.get(tank).position) > 15 && PVector.dist(tank.position, enemyBaseNodes.get(tank).position) < 30) {
+                    tank.state = random.nextInt(1, 6);
+                }
                 break;
         }
-
     }
 
     void recalculatePathFromCurrentPosition(Tank tank) {
@@ -893,6 +933,22 @@ class ExplorationManager {
             if (baseNode != null &&
                     Math.abs(baseNode.position.x - tank.position.x) < 5 &&
                     Math.abs(baseNode.position.y - tank.position.y) < 5) {
+                tanksAtHome++;
+            }
+        }
+
+        // Only return true if ALL tanks are physically at home AND enemy has been detected
+        return (tanksAtHome == tanks.size()) && enemyDetected;
+    }
+
+    boolean areAllTanksOutsideEnemyBase(){
+        // First check if all tanks are actually at their home positions
+        int tanksAtHome = 0;
+        for(Tank tank : tanks){
+            Node enemyBaseNodes = this.enemyBaseNodes.get(tank);
+            if (enemyBaseNodes != null &&
+                    Math.abs(enemyBaseNodes.position.x - tank.position.x) < 10 &&
+                    Math.abs(enemyBaseNodes.position.y - tank.position.y) < 10) {
                 tanksAtHome++;
             }
         }
@@ -1241,56 +1297,56 @@ class ExplorationManager {
 
         for (int i = 0; i < tanks.size() && i < 3; i++) {
             Tank tank = tanks.get(i);
-            PVector newPos = PVector.add(enemyBasePos, new PVector(-30, 100 * i));
-            if(newPos.y > 800){
-                newPos = PVector.add(enemyBasePos, new PVector(-30, -100 * i));
+            PVector newPos = PVector.add(enemyBasePos, new PVector(-45, 100 * i));
+            if (newPos.y > 800) {
+                newPos = PVector.add(enemyBasePos, new PVector(-45, -100 * i));
             }
             Node attackNode = addNode(newPos.x, newPos.y);
+            enemyBaseNodes.put(tank, attackNode);
             System.out.println("Start coordinated attack at position: " + attackNode.position);
-            navStates.put(tank, NavigationState.POSITION_AROUND_ENEMY_BASE);
-            ArrayList<PVector> path = new ArrayList<>();
-            for(Node node : aStar(baseNodes.get(tank), attackNode)){
+            attackEnemyBase(tank);
+        }
+    }
+    
+    void attackEnemyBase(Tank tank) {
+        navStates.put(tank, NavigationState.POSITION_AROUND_ENEMY_BASE);
+
+        Node closestNode = findClosestNode(tank.position);
+
+        if (closestNode == null || PVector.dist(closestNode.position, tank.position) > minNodeDistance) {
+            closestNode = addNode(tank.position.x, tank.position.y);
+        }
+        currentNodes.put(tank, closestNode);
+
+        // Use the tank's individual base node instead of a shared baseNode
+        Node attackNode = enemyBaseNodes.get(tank);
+        if (attackNode == null) {
+            parent.println("Warning: No base node found for tank " + tank.name);
+            return;
+        }
+
+        ArrayList<Node> pathingHome;
+
+        if (testDijkstra)
+            pathingHome = dijkstra(closestNode, attackNode);
+        else
+            pathingHome = aStar(closestNode, attackNode);
+
+        ArrayList<PVector> path = new ArrayList<>();
+        if (!pathingHome.isEmpty()) {
+            path.clear();
+
+            for (Node node : pathingHome) {
                 path.add(node.position.copy());
             }
             paths.put(tank, path);
 
-            if (!path.isEmpty()) {
-                PVector firstWaypoint = path.get(0);
-                Node firstNode = findClosestNode(firstWaypoint);
-                if (firstNode != null) {
-                    targetNodes.put(tank, firstNode);
-                }
+            if (pathingHome.size() > 1) {
+                targetNodes.put(tank, pathingHome.get(0));
             } else {
-                targetNodes.put(tank, attackNode); // Fallback if no path found
+                targetNodes.put(tank, attackNode);
             }
-            parent.println(tank.name + " assigned to position: ");
         }
-        /*
-        // Assign roles and positions to each tank
-        for (int i = 0; i < tanks.size() && i < 3; i++) {
-                Tank tank = tanks.get(i);
-                PVector attackPosition = calculateAttackPosition(enemyBasePos, i);
-            Node attackNode = addNode(attackPosition.x, attackPosition.y);
-            navStates.put(tank, NavigationState.POSITION_AROUND_ENEMY_BASE);
-            ArrayList<PVector> path = new ArrayList<>();
-            for(Node node : aStar(baseNodes.get(tank), attackNode)){
-                path.add(node.position.copy());
-            }
-            paths.put(tank, path);
-
-            if (!path.isEmpty()) {
-                PVector firstWaypoint = path.get(0);
-                Node firstNode = findClosestNode(firstWaypoint);
-                if (firstNode != null) {
-                    targetNodes.put(tank, firstNode);
-                }
-            } else {
-                targetNodes.put(tank, attackNode); // Fallback if no path found
-            }
-                parent.println(tank.name + " assigned to position: " + attackPosition);
-        }
-
-         */
     }
 
     PVector calculateAttackPosition(PVector enemyBase, int tankIndex) {

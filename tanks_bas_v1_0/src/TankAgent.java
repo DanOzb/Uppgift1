@@ -44,14 +44,14 @@ public class TankAgent {
         collisions.setCollisionHandler(new CollisionHandler() {
             @Override
             public void handleBorderCollision(Tank collidedTank) {
-                if (collidedTank == tank) {
+                if (collidedTank == tank && shouldHandleCollision()) {
                     borderCollisionHandle();
                 }
             }
 
             @Override
             public void handleTreeCollision(Tank collidedTank, Tree tree) {
-                if (collidedTank == tank) {
+                if (collidedTank == tank && shouldHandleCollision()) {
                     if (tree == null) {
                         // Notify exploration manager about persistent collision
                         Integer counter = explorationManager.samePositionCounters.get(tank);
@@ -72,7 +72,7 @@ public class TankAgent {
 
             @Override
             public void handleEnemyBaseCollision(Tank collidedTank) {
-                if (collidedTank == tank) {
+                if (collidedTank == tank && shouldHandleCollision()) {
                     System.out.println("Tank " + tank.name + " collided with enemy base");
                     //explorationManager.returnAllHome();
                     //TODO: reposition kanske around enemy base?
@@ -80,13 +80,13 @@ public class TankAgent {
             }
             @Override
             public void handleTankCollision(Tank tank, Tank tank2) {
-                if (!Objects.equals(tank.navState, "idle") && !Objects.equals(tank2.navState, "idle")) {
+                if (!Objects.equals(tank.navState, "idle") && !Objects.equals(tank2.navState, "idle") && shouldHandleCollision()) {
                     Node temp = explorationManager.targetNodes.get(tank);
                     explorationManager.targetNodes.put(tank, explorationManager.findClosestNode(tank.position));
                     explorationManager.moveTowardTarget(tank);
                     explorationManager.targetNodes.put(tank, temp);
                     explorationManager.navigation();
-                    System.out.println("Moved tanks");
+                    //System.out.println("Moved tanks");
                 }
             }
         });
@@ -99,7 +99,13 @@ public class TankAgent {
         // Process the detections based on the current state
         processSensorDetections();
     }
-
+    /*
+    * vi kan göra locked target global
+    * forloop -> ifsats(om tank isLockedOn)
+    * getLockedTarget
+    * faceDirection lockedTarget?
+    *
+    * */
     void processSensorDetections() {
         // If not in auto-explore mode, don't make autonomous decisions
         if (!explorationManager.isAutoExploreActive()) return;
@@ -115,7 +121,7 @@ public class TankAgent {
 
                     // Check if we're positioned around enemy base and should lock on
                     ExplorationManager.NavigationState navState = explorationManager.navStates.get(tank);
-                    if ((navState == ExplorationManager.NavigationState.POSITION_AROUND_ENEMY_BASE || navState == ExplorationManager.NavigationState.MOVING_TO_TARGET) && !isLockedOn) {
+                    if ((navState == ExplorationManager.NavigationState.ATTACK_MODE) && !isLockedOn && explorationManager.combatMode) {
                         // Lock onto the first enemy tank detected
                         if (detection.object instanceof Tank) {
                             lockedTarget = (Tank) detection.object;
@@ -133,7 +139,7 @@ public class TankAgent {
                 case TREE:
                     treeInWay = true;
                     // If we're about to hit a tree, try to find a way around
-                    if (PVector.dist(tank.position, detection.position) < 50) {
+                    if (PVector.dist(tank.position, detection.position) < 50 && shouldHandleCollision()) {
                         explorationManager.handleStuckTank(tank);
                     }
                     break;
@@ -147,7 +153,7 @@ public class TankAgent {
 
                 case BORDER:
                     // If we're about to hit a border, adjust course
-                    if (PVector.dist(tank.position, detection.position) < 30) {
+                    if (PVector.dist(tank.position, detection.position) < 30 && shouldHandleCollision()) {
                         borderCollisionHandle();
                     }
                     break;
@@ -175,35 +181,38 @@ public class TankAgent {
                     ((tanks_bas_v1_0)parent).allTanks,
                     ((tanks_bas_v1_0)parent).allTrees
             );
+            ExplorationManager.NavigationState navState = explorationManager.navStates.get(tank);
 
+            // Try to shoot
+            if (isLockedOn) {
+                tank.fire();
+            }
+            /*
             for (SensorDetection detection : detections) {
-                if (detection.type == SensorDetection.ObjectType.ENEMY) {
+                if (detection.type == SensorDetection.ObjectType.ENEMY && navState == ExplorationManager.NavigationState.WAITING_OUTSIDE_ENEMY_BASE) {
                     // Enemy detected - determine if we should attack
                     float distance = PVector.dist(tank.position, detection.position);
-                    if (distance < 450) { // Within attack range
+                    if (distance < 400) { // Within attack range
                         currentState = AgentState.ATTACKING;
 
                         // Face the enemy
-                        PVector direction = PVector.sub(detection.position, tank.position);
-                        faceDirection(direction);
 
-                        // Try to shoot
-                        tank.fire();
                         break;
                     }
                 }
             }
+            */
         }
     }
 
-    private void faceTarget(Tank target) {
+    void faceTarget(Tank target) {
         if (target == null) return;
 
         PVector direction = PVector.sub(target.position, tank.position);
         faceDirection(direction);
     }
 
-    private void faceDirection(PVector direction) {
+    void faceDirection(PVector direction) {
         direction.normalize();
 
         // Determine which of the 8 directions is closest
@@ -225,7 +234,6 @@ public class TankAgent {
         }
     }
 
-    // Method to check if this agent is locked on (for visual feedback)
     public boolean isLockedOn() {
         return isLockedOn && currentState == AgentState.LOCKED_ON;
     }
@@ -309,5 +317,14 @@ public class TankAgent {
         } else {
             explorationManager.testDijkstra = false;
         }
+    }
+
+    boolean shouldHandleCollision(){
+        ExplorationManager.NavigationState navState = explorationManager.navStates.get(tank);
+
+        if(navState == ExplorationManager.NavigationState.POSITION_AROUND_ENEMY_BASE) return false;
+        else if(navState == ExplorationManager.NavigationState.WAITING_AT_HOME) return false;
+        else if(navState == ExplorationManager.NavigationState.ATTACK_MODE) return false;
+        return true;
     }
 }

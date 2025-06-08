@@ -57,8 +57,10 @@ class Sensor {
      * @return List of detected objects with their positions and types
      */
     ArrayList<SensorDetection> scan(Tank[] allTanks, Tree[] allTrees) {
+        tanks_bas_v1_0 game = (tanks_bas_v1_0) parent;
+
         ArrayList<SensorDetection> detections = new ArrayList<>();
-        if(isLockedOn) return detections;
+        //if(isLockedOn) return detections;
 
         // Determine the tank's facing direction based on its state
         PVector direction = getTankDirection();
@@ -110,9 +112,11 @@ class Sensor {
                         type = SensorDetection.ObjectType.FRIEND;
                     } else {
                         type = SensorDetection.ObjectType.ENEMY;
-                        setIsLockedOn(true);
                         setLockedTarget(otherTank);
-                        System.out.println("Sensor: " + tank.name + " found enemy tank " + otherTank.name);
+                        //System.out.println("Sensor: " + tank.name + " found enemy tank " + otherTank.name);
+                        if (game.team0.explorationManager.combatMode) {
+                            setIsLockedOn(true); //TODO: vänta på combat flag
+                        }
                     }
 
                     // Add detection with a reference to the actual tank
@@ -122,9 +126,6 @@ class Sensor {
         }
 
         // Check for base detections
-        if (parent instanceof tanks_bas_v1_0) {
-            tanks_bas_v1_0 game = (tanks_bas_v1_0) parent;
-
             // Detect team0 base
             if (lineRectIntersection(start, end, game.team0.basePosition, game.team0.baseSize)) {
                 SensorDetection.ObjectType type = (tank.col == game.team0.teamColor) ?
@@ -140,7 +141,7 @@ class Sensor {
             }
             // Detect team1 base
             if (lineRectIntersection(start, end, game.team1.basePosition, game.team1.baseSize) && !game.team0.getEnemyBaseDetected()) {
-                System.out.println("Sensor: base detected");
+                //System.out.println("Sensor: base detected");
                     SensorDetection.ObjectType type = (tank.col == game.team1.teamColor) ?
                             SensorDetection.ObjectType.FRIEND :
                             SensorDetection.ObjectType.BASE;
@@ -153,13 +154,12 @@ class Sensor {
 
                 detections.add(new SensorDetection(detectionPos, type, game.team1));
             }
-        }
         visualize(detections);
         return detections;
     }
 
     public void setLockedTarget(Tank tank) {
-        System.out.println("Sensor: tank " + tank.name+ " is 0");
+        //System.out.println("Sensor: tank " + tank.name+ " is 0");
         tank.state = 0;
         lockedTarget = tank;
     }
@@ -206,7 +206,7 @@ class Sensor {
                 break;
         }
 
-        direction.normalize();
+        //direction.normalize();
         return direction;
     }
 
@@ -415,7 +415,6 @@ class Sensor {
 
             if (closest != null) {
                 parent.line(start.x, start.y, closest.position.x, closest.position.y);
-                System.out.println(closest.type);
                 parent.noFill();
 
                 if (getIsLockedOn() && closest.type == SensorDetection.ObjectType.ENEMY &&
@@ -466,6 +465,7 @@ class Sensor {
         return isLockedOn;
     }
     public void setIsLockedOn(boolean isLockedOn) {
+        //System.out.println("locked: " + isLockedOn);
         this.isLockedOn = isLockedOn;
     }
 }
