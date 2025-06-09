@@ -1,4 +1,5 @@
 import processing.core.*;
+
 import java.util.*;
 
 /**
@@ -16,32 +17,44 @@ class SensorDetection {
 
     PVector position;
     ObjectType type;
-    Object object; // Reference to the detected object
-
+    Object object;
+    /**
+     * Constructor for sensor detection data.
+     * @param position Position where the object was detected
+     * @param type Type of object detected
+     * @param object Reference to the actual detected object
+     */
     SensorDetection(PVector position, ObjectType type, Object object) {
         this.position = position;
         this.type = type;
         this.object = object;
-    }
-    public ObjectType getType() {
-        return type;
     }
 }
 
 /**
  * Handles Line of Sight (LOS) detection for tanks.
  * Detects objects in the tank's line of sight and returns information about them.
+ * In combat mode, sensor spins independently to scan for enemies.
  */
 class Sensor {
     PApplet parent;
     Tank tank;
     float maxViewDistance;
-    float radianViewAngle; // Field of view angle in radians
+    float radianViewAngle;
     Tank lockedTarget = null;
     boolean isLockedOn = false;
 
-    SensorDetection detect;
-
+    float rotationAngle = 0;
+    float rotationSpeed = PApplet.radians(3);
+    boolean isSpinning = false;
+    boolean combatMode = false;
+    /**
+     * Constructor for tank sensor system.
+     * @param parent The Processing PApplet instance
+     * @param tank The tank this sensor belongs to
+     * @param maxViewDistance Maximum detection range
+     * @param viewAngle Field of view angle in radians
+     */
     Sensor(PApplet parent, Tank tank, float maxViewDistance, float viewAngle) {
         this.parent = parent;
         this.tank = tank;
@@ -50,33 +63,114 @@ class Sensor {
     }
 
     /**
-     * Performs a line of sight scan in the tank's current direction.
-     *
-     * @param allTanks Array of all tanks to check against
-     * @param allTrees Array of all trees to check against
-     * @return List of detected objects with their positions and types
+     * Performs line of sight scan and detects objects in sensor range.
+     * Handles both normal scanning and combat mode spinning behavior.
+     * @param allTanks Array of tanks to scan for
+     * @param allTrees Array of trees to scan for
+     * @return List of detected objects with positions and types
      */
     ArrayList<SensorDetection> scan(Tank[] allTanks, Tree[] allTrees) {
+        validateLockedTarget();
         tanks_bas_v1_0 game = (tanks_bas_v1_0) parent;
 
         ArrayList<SensorDetection> detections = new ArrayList<>();
-        //if(isLockedOn) return detections;
 
-        // Determine the tank's facing direction based on its state
-        PVector direction = getTankDirection();
+        updateCombatMode();
 
-        // Calculate the start and end points for the ray
+        if (combatMode && !isLockedOn) {
+            isSpinning = true;
+            rotationAngle += rotationSpeed;
+            if (rotationAngle >= PApplet.TWO_PI) {
+                rotationAngle -= PApplet.TWO_PI;
+            }
+        } else {
+            isSpinning = false;
+        }
+
+        PVector direction = getSensorDirection();
+
         PVector start = tank.position.copy();
         PVector end = PVector.add(start, PVector.mult(direction, maxViewDistance));
 
-        // Check for border intersections and adjust end point if needed
+        if (combatMode && isSpinning) {
+            scanForEnemies(allTanks, start, end, detections);
+        } else {
+            performFullScan(allTanks, allTrees, start, end, detections);
+        }
+
+        visualize(detections);
+        return detections;
+    }
+
+    /**
+     * Updates combat mode status based on current game state.
+     */
+    private void updateCombatMode() {
+        if (parent instanceof tanks_bas_v1_0) {
+            tanks_bas_v1_0 game = (tanks_bas_v1_0) parent;
+            combatMode = game.team0.explorationManager.combatMode;
+        }
+    }
+
+    /**
+     * Gets the current direction vector of the sensor.
+     * @return Normalized direction vector for sensor scanning
+     */
+    PVector getSensorDirection() {
+        if (combatMode && isSpinning) {
+            PVector direction = new PVector(PApplet.cos(rotationAngle), PApplet.sin(rotationAngle));
+            direction.normalize();
+            return direction;
+        } else {
+            return getTankDirection();
+        }
+    }
+
+    /**
+     * Scans specifically for enemy tanks during combat mode spinning.
+     * @param allTanks Array of tanks to check
+     * @param start Sensor start position
+     * @param end Sensor end position
+     * @param detections List to add detections to
+     */
+    private void scanForEnemies(Tank[] allTanks, PVector start, PVector end, ArrayList<SensorDetection> detections) {
+        if (isLockedOn && lockedTarget != null && !lockedTarget.isDestroyed) {
+            return;
+        }
+
+        for (Tank otherTank : allTanks) {
+            if (otherTank != null && otherTank != tank && otherTank.col != tank.col) {
+                PVector intersection = lineCircleIntersection(start, end, otherTank.position, otherTank.diameter / 2);
+                if (intersection != null) {
+                    setLockedTarget(otherTank);
+                    setIsLockedOn(true);
+                    isSpinning = false;
+
+                    detections.add(new SensorDetection(intersection.copy(), SensorDetection.ObjectType.ENEMY, otherTank));
+
+                    System.out.println("Sensor: " + tank.name + " found enemy tank " + otherTank.name + " while spinning");
+                    break;
+                }
+            }
+        }
+    }
+
+    /**
+     * Performs comprehensive scan for all object types.
+     * @param allTanks Array of tanks to scan
+     * @param allTrees Array of trees to scan
+     * @param start Sensor start position
+     * @param end Sensor end position
+     * @param detections List to add detections to
+     */
+    private void performFullScan(Tank[] allTanks, Tree[] allTrees, PVector start, PVector end, ArrayList<SensorDetection> detections) {
+        tanks_bas_v1_0 game = (tanks_bas_v1_0) parent;
+
         PVector borderIntersection = checkBorderIntersection(start, end);
         if (borderIntersection != null) {
             end = borderIntersection;
             detections.add(new SensorDetection(end.copy(), SensorDetection.ObjectType.BORDER, null));
         }
-
-        // Check for tree intersections
         PVector closestTreeIntersection = null;
         Tree closestTree = null;
         float closestTreeDistance = Float.MAX_VALUE;
@@ -100,73 +194,59 @@ class Sensor {
             detections.add(new SensorDetection(end.copy(), SensorDetection.ObjectType.TREE, closestTree));
         }
 
-        // Check for tank intersections that are before the end point
         for (Tank otherTank : allTanks) {
-            if (otherTank != null && otherTank != tank) {
-                PVector intersection = lineCircleIntersection(start, end, otherTank.position, otherTank.diameter/2);
+            if (otherTank != null && otherTank != tank && !otherTank.isDestroyed) {
+                PVector intersection = lineCircleIntersection(start, end, otherTank.position, otherTank.diameter / 2);
                 if (intersection != null) {
                     SensorDetection.ObjectType type;
 
-                    // Identify friend or enemy based on color
                     if (otherTank.col == tank.col) {
                         type = SensorDetection.ObjectType.FRIEND;
                     } else {
                         type = SensorDetection.ObjectType.ENEMY;
                         setLockedTarget(otherTank);
-                        //System.out.println("Sensor: " + tank.name + " found enemy tank " + otherTank.name);
-                        if (game.team0.explorationManager.combatMode) {
-                            setIsLockedOn(true); //TODO: vänta på combat flag
+                        if (combatMode) {
+                            setIsLockedOn(true);
                         }
                     }
 
-                    // Add detection with a reference to the actual tank
                     detections.add(new SensorDetection(intersection.copy(), type, otherTank));
                 }
             }
         }
+        if (lineRectIntersection(start, end, game.team0.basePosition, game.team0.baseSize)) {
+            SensorDetection.ObjectType type = (tank.col == game.team0.teamColor) ?
+                    SensorDetection.ObjectType.FRIEND :
+                    SensorDetection.ObjectType.BASE;
 
-        // Check for base detections
-            // Detect team0 base
-            if (lineRectIntersection(start, end, game.team0.basePosition, game.team0.baseSize)) {
-                SensorDetection.ObjectType type = (tank.col == game.team0.teamColor) ?
-                        SensorDetection.ObjectType.FRIEND :
-                        SensorDetection.ObjectType.BASE;
+            PVector detectionPos = (type == SensorDetection.ObjectType.BASE) ?
+                    tank.position.copy() :
+                    PVector.add(game.team0.basePosition, PVector.mult(game.team0.baseSize, 0.5f));
 
-                // Use tank's position for enemy bases, base center for friendly bases
-                PVector detectionPos = (type == SensorDetection.ObjectType.BASE) ?
-                        tank.position.copy() :
-                        PVector.add(game.team0.basePosition, PVector.mult(game.team0.baseSize, 0.5f));
+            detections.add(new SensorDetection(detectionPos, type, game.team0));
+        }
+        if (lineRectIntersection(start, end, game.team1.basePosition, game.team1.baseSize) && !game.team0.getEnemyBaseDetected()) {
+            SensorDetection.ObjectType type = (tank.col == game.team1.teamColor) ?
+                    SensorDetection.ObjectType.FRIEND :
+                    SensorDetection.ObjectType.BASE;
 
-                detections.add(new SensorDetection(detectionPos, type, game.team0));
-            }
-            // Detect team1 base
-            if (lineRectIntersection(start, end, game.team1.basePosition, game.team1.baseSize) && !game.team0.getEnemyBaseDetected()) {
-                //System.out.println("Sensor: base detected");
-                    SensorDetection.ObjectType type = (tank.col == game.team1.teamColor) ?
-                            SensorDetection.ObjectType.FRIEND :
-                            SensorDetection.ObjectType.BASE;
+            PVector detectionPos = (type == SensorDetection.ObjectType.BASE) ?
+                    end :
+                    PVector.add(game.team1.basePosition, PVector.mult(game.team1.baseSize, 0.5f));
 
-
-                // Use tank's position for enemy bases, base center for friendly bases
-                PVector detectionPos = (type == SensorDetection.ObjectType.BASE) ?
-                        end :
-                        PVector.add(game.team1.basePosition, PVector.mult(game.team1.baseSize, 0.5f));
-
-                detections.add(new SensorDetection(detectionPos, type, game.team1));
-            }
-        visualize(detections);
-        return detections;
+            detections.add(new SensorDetection(detectionPos, type, game.team1));
+        }
     }
-
+    /**
+     * Sets the currently locked target for this sensor.
+     * @param tank The tank to lock onto
+     */
     public void setLockedTarget(Tank tank) {
-        //System.out.println("Sensor: tank " + tank.name+ " is 0");
-        tank.state = 0;
         lockedTarget = tank;
     }
 
     /**
-     * Gets the tank's direction vector based on its state.
-     *
+     * Gets the tank's current facing direction based on movement state.
      * @return Normalized direction vector
      */
     PVector getTankDirection() {
@@ -174,7 +254,7 @@ class Sensor {
 
         switch (tank.state) {
             case 0: // Stationary
-                direction.x = 1; // Default to facing right when stationary
+                direction.x = 1;
                 break;
             case 1: // Right
                 direction.x = 1;
@@ -206,18 +286,17 @@ class Sensor {
                 break;
         }
 
-        //direction.normalize();
+        direction.normalize();
         return direction;
     }
 
     /**
-     * Checks if a line intersects with a circle.
-     *
+     * Calculates intersection point between a line and circle.
      * @param lineStart Start point of the line
      * @param lineEnd End point of the line
      * @param circleCenter Center of the circle
      * @param circleRadius Radius of the circle
-     * @return Point of intersection, or null if no intersection
+     * @return Intersection point or null if no intersection
      */
     private PVector lineCircleIntersection(PVector lineStart, PVector lineEnd, PVector circleCenter, float circleRadius) {
         PVector d = PVector.sub(lineEnd, lineStart);
@@ -235,11 +314,9 @@ class Sensor {
 
         discriminant = (float) Math.sqrt(discriminant);
 
-        // Two possible t values for intersection
         float t1 = (-b - discriminant) / (2 * a);
         float t2 = (-b + discriminant) / (2 * a);
 
-        // Check if either intersection point is within the line segment
         if (t1 >= 0 && t1 <= 1) {
             return PVector.add(lineStart, PVector.mult(d, t1));
         }
@@ -252,11 +329,10 @@ class Sensor {
     }
 
     /**
-     * Checks if a line intersects with the game borders.
-     *
-     * @param start Start point of the line
-     * @param end End point of the line
-     * @return Point of intersection with the border, or null if no intersection
+     * Checks if sensor line intersects with game boundaries.
+     * @param start Start point of sensor line
+     * @param end End point of sensor line
+     * @return Border intersection point or null
      */
     private PVector checkBorderIntersection(PVector start, PVector end) {
         float width = parent.width;
@@ -308,13 +384,12 @@ class Sensor {
     }
 
     /**
-     * Checks if a line intersects with a rectangle.
-     *
+     * Checks if a line intersects with a rectangular area.
      * @param lineStart Start point of the line
      * @param lineEnd End point of the line
-     * @param rectPos Position of the rectangle (top-left corner)
-     * @param rectSize Size of the rectangle (width, height)
-     * @return True if the line intersects with the rectangle
+     * @param rectPos Position of rectangle (top-left)
+     * @param rectSize Size of rectangle (width, height)
+     * @return true if line intersects rectangle
      */
     private boolean lineRectIntersection(PVector lineStart, PVector lineEnd, PVector rectPos, PVector rectSize) {
         float x1 = rectPos.x;
@@ -322,13 +397,11 @@ class Sensor {
         float x2 = rectPos.x + rectSize.x;
         float y2 = rectPos.y + rectSize.y;
 
-        // Check if either endpoint is inside the rectangle
         if ((lineStart.x >= x1 && lineStart.x <= x2 && lineStart.y >= y1 && lineStart.y <= y2) ||
                 (lineEnd.x >= x1 && lineEnd.x <= x2 && lineEnd.y >= y1 && lineEnd.y <= y2)) {
             return true;
         }
 
-        // Check if the line intersects any of the rectangle's edges
         PVector topLeft = new PVector(x1, y1);
         PVector topRight = new PVector(x2, y1);
         PVector bottomLeft = new PVector(x1, y2);
@@ -341,13 +414,12 @@ class Sensor {
     }
 
     /**
-     * Checks if two line segments intersect.
-     *
-     * @param p1 Start point of first line segment
-     * @param p2 End point of first line segment
-     * @param p3 Start point of second line segment
-     * @param p4 End point of second line segment
-     * @return True if the line segments intersect
+     * Checks intersection between two line segments.
+     * @param p1 Start of first line segment
+     * @param p2 End of first line segment
+     * @param p3 Start of second line segment
+     * @param p4 End of second line segment
+     * @return true if segments intersect
      */
     private boolean lineSegmentIntersection(PVector p1, PVector p2, PVector p3, PVector p4) {
         float d1x = p2.x - p1.x;
@@ -357,7 +429,7 @@ class Sensor {
 
         float denominator = d1y * d2x - d1x * d2y;
         if (denominator == 0) {
-            return false; // Lines are parallel
+            return false;
         }
 
         float s = ((p1.x - p3.x) * d1y - (p1.y - p3.y) * d1x) / denominator;
@@ -367,14 +439,34 @@ class Sensor {
     }
 
     /**
-     * Draws the sensor's line of sight for visualization.
-     * Shows red visualization when tank is locked onto a target.
+     * Visualizes the sensor's line of sight and detected objects.
+     * Shows different visual styles for different sensor modes.
+     * @param detections List of detected objects to visualize
      */
     void visualize(ArrayList<SensorDetection> detections) {
-        PVector direction = getTankDirection();
+        PVector direction = getSensorDirection();
         PVector start = tank.position.copy();
 
-        // Check if tank is locked on by accessing the game and finding the tank agent
+        if (getIsLockedOn() && lockedTarget != null) {
+            parent.pushMatrix();
+
+            parent.stroke(255, 0, 0, 200);
+            parent.strokeWeight(3);
+            parent.line(start.x, start.y, lockedTarget.position.x, lockedTarget.position.y);
+
+            parent.noFill();
+            parent.ellipse(lockedTarget.position.x, lockedTarget.position.y, 30, 30);
+            parent.line(lockedTarget.position.x - 15, lockedTarget.position.y, lockedTarget.position.x + 15, lockedTarget.position.y);
+            parent.line(lockedTarget.position.x, lockedTarget.position.y - 15, lockedTarget.position.x, lockedTarget.position.y + 15);
+
+            parent.fill(0);
+            parent.textSize(12);
+            parent.text("LOCKED: " + lockedTarget.name, lockedTarget.position.x + 15, lockedTarget.position.y);
+
+            parent.popMatrix();
+            return;
+        }
+
         if (parent instanceof tanks_bas_v1_0) {
             tanks_bas_v1_0 game = (tanks_bas_v1_0) parent;
             for (TankAgent agent : game.team0.agents) {
@@ -387,21 +479,21 @@ class Sensor {
 
         parent.pushMatrix();
 
-        // Set stroke color based on lock-on status
         if (getIsLockedOn()) {
-            parent.stroke(255, 0, 0, 200); // Bright red for locked on
+            parent.stroke(255, 0, 0, 200);
             parent.strokeWeight(3);
+        } else if (isSpinning && combatMode) {
+            parent.stroke(255, 100, 0, 180);
+            parent.strokeWeight(2);
         } else {
-            parent.stroke(255, 255, 0, 150); // Yellow for normal
+            parent.stroke(255, 255, 0, 150);
             parent.strokeWeight(2);
         }
 
         if (detections.isEmpty()) {
-            // No detections, draw full ray
             PVector end = PVector.add(start, PVector.mult(direction, maxViewDistance));
             parent.line(start.x, start.y, end.x, end.y);
         } else {
-            // Find the closest detection
             SensorDetection closest = null;
             float minDist = Float.MAX_VALUE;
 
@@ -421,12 +513,11 @@ class Sensor {
                         closest.object == lockedTarget) {
                     parent.stroke(255, 0, 0, 255);
                     parent.strokeWeight(4);
-                    // Draw crosshairs on the locked target
                     parent.ellipse(closest.position.x, closest.position.y, 30, 30);
                     parent.line(closest.position.x - 15, closest.position.y, closest.position.x + 15, closest.position.y);
                     parent.line(closest.position.x, closest.position.y - 15, closest.position.x, closest.position.y + 15);
                 } else {
-                    switch(closest.type) {
+                    switch (closest.type) {
                         case FRIEND:
                             parent.stroke(0, 255, 0, 200);
                             break;
@@ -446,13 +537,14 @@ class Sensor {
                     parent.ellipse(closest.position.x, closest.position.y, 20, 20);
                 }
 
-                // Draw a label for the detected object
                 parent.fill(0);
                 parent.textSize(12);
                 String label = closest.type.toString();
-                if (getIsLockedOn() && closest.type == SensorDetection.ObjectType.ENEMY &&
+                if (isSpinning && combatMode) {
+                    label = "SCANNING: " + closest.type.toString();
+                } else if (getIsLockedOn() && closest.type == SensorDetection.ObjectType.ENEMY &&
                         closest.object == lockedTarget) {
-                    label = "LOCKED: " + ((Tank)closest.object).name;
+                    label = "LOCKED: " + ((Tank) closest.object).name;
                 }
                 parent.text(label, closest.position.x + 15, closest.position.y);
             }
@@ -460,12 +552,41 @@ class Sensor {
 
         parent.popMatrix();
     }
-
+    /**
+     * Gets the current lock-on status of the sensor.
+     * @return true if sensor is locked onto a target
+     */
     public boolean getIsLockedOn() {
         return isLockedOn;
     }
+    /**
+     * Sets the lock-on status of the sensor.
+     * @param isLockedOn true to enable lock-on mode
+     */
     public void setIsLockedOn(boolean isLockedOn) {
-        //System.out.println("locked: " + isLockedOn);
         this.isLockedOn = isLockedOn;
+    }
+    /**
+     * Checks if the sensor is currently in spinning scan mode.
+     * @return true if sensor is spinning to scan for targets
+     */
+    public boolean isSpinning() {
+        return isSpinning;
+    }
+    /**
+     * Checks if the sensor is in combat mode.
+     * @return true if sensor is in combat scanning mode
+     */
+    public boolean isCombatMode() {
+        return combatMode;
+    }
+    /**
+     * Validates that the locked target is still alive and removes it if destroyed.
+     */
+    void validateLockedTarget() {
+        if (lockedTarget != null && lockedTarget.isDestroyed) {
+            lockedTarget = null;
+            isLockedOn = false;
+        }
     }
 }

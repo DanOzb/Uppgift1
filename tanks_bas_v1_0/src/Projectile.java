@@ -21,10 +21,9 @@ class Projectile {
     ArrayList<ExplosionParticle> particles;
 
     /**
-     * Creates a new projectile.
-     *
-     * @param parent The Processing PApplet
-     * @param owner The tank that fired this projectile
+     * Constructor for creating a projectile.
+     * @param parent The Processing PApplet instance
+     * @param owner The tank that will fire this projectile
      */
     Projectile(PApplet parent, Tank owner) {
         this.parent = parent;
@@ -35,10 +34,9 @@ class Projectile {
     }
 
     /**
-     * Fires the projectile from the tank's position in the specified direction.
-     *
-     * @param startPos Starting position of the projectile
-     * @param direction Direction vector for the projectile
+     * Fires the projectile from a starting position in a specified direction.
+     * @param startPos The initial position of the projectile
+     * @param direction The direction vector for projectile movement
      */
     void fire(PVector startPos, PVector direction) {
         this.position = startPos.copy();
@@ -48,7 +46,8 @@ class Projectile {
     }
 
     /**
-     * Updates the projectile's position and handles explosion animation.
+     * Updates projectile position and handles explosion animation.
+     * Moves the projectile and manages its lifecycle.
      */
     void update() {
         if (!active) return;
@@ -84,7 +83,8 @@ class Projectile {
     }
 
     /**
-     * Starts the explosion animation and deactivates the projectile.
+     * Initiates explosion animation and creates particle effects.
+     * Deactivates the projectile and starts visual explosion.
      */
     void explode() {
         exploding = true;
@@ -97,43 +97,34 @@ class Projectile {
     }
 
     /**
-     * Checks for collision with a tank.
-     *
-     * @param tank Tank to check for collision
-     * @return true if collision occurred, false otherwise
+     * Checks for collision between this projectile and a tank.
+     * @param tank The tank to check collision against
      */
-    boolean checkTankCollision(Tank tank) {
-        if (!active || exploding || tank == owner || tank.isDestroyed) return false;
+    void checkTankCollision(Tank tank) {
+        if (!active || exploding || tank == owner || tank.isDestroyed) return;
 
         float distance = PVector.dist(position, tank.position);
         if (distance < (radius + tank.diameter/2)) {
             explode();
             tank.handleHit();
             owner.registerHit();
-            return true;
         }
-        return false;
     }
-
     /**
-     * Checks for collision with a tree.
+     * Checks for collision between this projectile and a tree.
      *
-     * @param tree Tree to check for collision
-     * @return true if collision occurred, false otherwise
+     * @param tree The tree to check collision against
      */
-    boolean checkTreeCollision(Tree tree) {
-        if (!active || exploding) return false;
+    void checkTreeCollision(Tree tree) {
+        if (!active || exploding) return;
 
         float distance = PVector.dist(position, tree.position);
         if (distance < (radius + tree.radius)) {
             explode();
-            return true;
         }
-        return false;
     }
-
     /**
-     * Draws the projectile or explosion animation.
+     * Renders the projectile or explosion animation.
      */
     void display() {
         if (!active) return;
@@ -165,7 +156,11 @@ class ExplosionParticle {
     float size;
     int opacity = 255;
     int fadeRate = 10;
-
+    /**
+     * Constructor for explosion particle effect.
+     * @param parent The Processing PApplet instance
+     * @param pos Initial position of the particle
+     */
     ExplosionParticle(PApplet parent, PVector pos) {
         this.parent = parent;
         this.position = pos.copy();
@@ -177,7 +172,9 @@ class ExplosionParticle {
 
         this.size = parent.random(5, 15);
     }
-
+    /**
+     * Updates particle position, velocity, and opacity over time.
+     */
     void update() {
         position.add(velocity);
 
@@ -187,13 +184,18 @@ class ExplosionParticle {
         // Fade out
         opacity -= fadeRate;
     }
-
+    /**
+     * Renders the particle with current position and opacity.
+     */
     void display() {
         parent.noStroke();
         parent.fill(255, 200, 0, opacity); // Orange/yellow explosion
         parent.ellipse(position.x, position.y, size, size);
     }
-
+    /**
+     * Checks if the particle has faded out completely.
+     * @return true if the particle should be removed
+     */
     boolean isDead() {
         return opacity <= 0;
     }

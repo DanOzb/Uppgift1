@@ -1,45 +1,46 @@
 import processing.core.*;
+
 import java.util.ArrayList;
 import java.util.Objects;
 
 public class TankAgent {
     PApplet parent;
     Tank tank;
-    ExplorationManager explorationManager; // This is now a reference to a shared instance
-    int counter;
+    ExplorationManager explorationManager;
 
     ArrayList<SensorDetection> lastSensorDetections;
 
-    // Lock-on system
-    Tank lockedTarget = null;
-    boolean isLockedOn = false;
 
     enum AgentState {
         EXPLORING,
-        ATTACKING,
-        DEFENDING, // Wanted to create tanks that patrol and defend their base, but would take too much time.
-        RETURNING_HOME,
-        LOCKED_ON // New state for lock-on functionality
+        ATTACKING, //no usage, time sink too large for scope of task
+        DEFENDING, //no usage, time sink too large for scope of task
+        RETURNING_HOME, //no usage, time sink too large for scope of task
+        LOCKED_ON
     }
-
     AgentState currentState;
-
-    // 2-argument constructor with shared exploration manager
+    /**
+     * Constructor for tank agent with shared exploration manager.
+     * @param parent The Processing PApplet instance
+     * @param tank The tank this agent controls
+     * @param explorationManager Shared exploration manager for team coordination
+     */
     TankAgent(PApplet parent, Tank tank, ExplorationManager explorationManager) {
         this.parent = parent;
         this.tank = tank;
 
-        // Store the shared exploration manager
         this.explorationManager = explorationManager;
 
-        // Add this tank to the exploration manager
         this.explorationManager.addTank(tank);
 
         this.currentState = AgentState.EXPLORING;
 
         this.lastSensorDetections = new ArrayList<>();
     }
-
+    /**
+     * Sets up collision handling callbacks for this agent's tank.
+     * @param collisions The collision manager to register handlers with
+     */
     void setupCollisionHandler(Collisions collisions) {
         collisions.setCollisionHandler(new CollisionHandler() {
             @Override
@@ -48,12 +49,10 @@ public class TankAgent {
                     borderCollisionHandle();
                 }
             }
-
             @Override
             public void handleTreeCollision(Tank collidedTank, Tree tree) {
                 if (collidedTank == tank && shouldHandleCollision()) {
                     if (tree == null) {
-                        // Notify exploration manager about persistent collision
                         Integer counter = explorationManager.samePositionCounters.get(tank);
                         if (counter != null) {
                             explorationManager.samePositionCounters.put(tank, 60);
@@ -73,11 +72,12 @@ public class TankAgent {
             @Override
             public void handleEnemyBaseCollision(Tank collidedTank) {
                 if (collidedTank == tank && shouldHandleCollision()) {
-                    System.out.println("Tank " + tank.name + " collided with enemy base");
+                    //System.out.println("Tank " + tank.name + " collided with enemy base");
                     //explorationManager.returnAllHome();
                     //TODO: reposition kanske around enemy base?
                 }
             }
+
             @Override
             public void handleTankCollision(Tank tank, Tank tank2) {
                 if (!Objects.equals(tank.navState, "idle") && !Objects.equals(tank2.navState, "idle") && shouldHandleCollision()) {
@@ -86,48 +86,40 @@ public class TankAgent {
                     explorationManager.moveTowardTarget(tank);
                     explorationManager.targetNodes.put(tank, temp);
                     explorationManager.navigation();
-                    //System.out.println("Moved tanks");
                 }
             }
         });
     }
-
+    /**
+     * Updates sensor readings and processes detection data.
+     * @param allTanks Array of all tanks for sensor scanning
+     * @param allTrees Array of all trees for sensor scanning
+     */
     void updateSensor(Tank[] allTanks, Tree[] allTrees) {
-        // Get the latest sensor readings
         lastSensorDetections = tank.scan(allTanks, allTrees);
-
-        // Process the detections based on the current state
         processSensorDetections();
     }
-    /*
-    * vi kan göra locked target global
-    * forloop -> ifsats(om tank isLockedOn)
-    * getLockedTarget
-    * faceDirection lockedTarget?
-    *
-    * */
+    /**
+     * Processes sensor detections and makes tactical decisions.
+     * Handles enemy detection, obstacle avoidance, and target locking.
+     */
     void processSensorDetections() {
-        // If not in auto-explore mode, don't make autonomous decisions
         if (!explorationManager.isAutoExploreActive()) return;
 
-        boolean enemyDetected = false;
         boolean treeInWay = false;
 
         for (SensorDetection detection : lastSensorDetections) {
             switch (detection.type) {
                 case ENEMY:
-                    enemyDetected = true;
 
 
-                    // Check if we're positioned around enemy base and should lock on
                     ExplorationManager.NavigationState navState = explorationManager.navStates.get(tank);
-                    if ((navState == ExplorationManager.NavigationState.ATTACK_MODE) && !isLockedOn && explorationManager.combatMode) {
-                        // Lock onto the first enemy tank detected
+                    if ((navState == ExplorationManager.NavigationState.ATTACK_MODE) && !tank.losSensor.getIsLockedOn() && explorationManager.combatMode) {
                         if (detection.object instanceof Tank) {
-                            lockedTarget = (Tank) detection.object;
-                            isLockedOn = true;
+                            tank.losSensor.lockedTarget = (Tank) detection.object;
+                            tank.losSensor.setIsLockedOn(true);
                             currentState = AgentState.LOCKED_ON;
-                            parent.println(tank.name + " LOCKED ONTO TARGET: " + lockedTarget.name);
+                            parent.println(tank.name + " LOCKED ONTO TARGET: " + tank.losSensor.lockedTarget.name);
                         }
                     }
 
@@ -138,7 +130,6 @@ public class TankAgent {
 
                 case TREE:
                     treeInWay = true;
-                    // If we're about to hit a tree, try to find a way around
                     if (PVector.dist(tank.position, detection.position) < 50 && shouldHandleCollision()) {
                         explorationManager.handleStuckTank(tank);
                     }
@@ -152,7 +143,6 @@ public class TankAgent {
                     break;
 
                 case BORDER:
-                    // If we're about to hit a border, adjust course
                     if (PVector.dist(tank.position, detection.position) < 30 && shouldHandleCollision()) {
                         borderCollisionHandle();
                     }
@@ -161,88 +151,100 @@ public class TankAgent {
         }
 
         if (currentState == AgentState.EXPLORING && treeInWay) {
-            // Try to find a clearer path
             explorationManager.expandRRT(tank);
         }
     }
-
+    /**
+     * Main update loop for agent behavior and decision making.
+     * Handles lock-on behavior, combat mode, and firing decisions.
+     */
     void update() {
-        // Handle lock-on behavior
-        if (currentState == AgentState.LOCKED_ON && isLockedOn && lockedTarget != null) {
-            faceTarget(lockedTarget);
+        if (currentState == AgentState.LOCKED_ON && tank.losSensor.getIsLockedOn() && tank.losSensor.lockedTarget != null) {
+            tank.state = 9;
+            tank.navState = "LOCKED ON: " + tank.losSensor.lockedTarget.name;
+        }
 
-            tank.state = 0;
-
-            tank.navState = "LOCKED ON: " + lockedTarget.name;
+        if (tank.losSensor.isCombatMode() && tank.losSensor.isSpinning() && !tank.losSensor.getIsLockedOn()) {
+            tank.state = 9;
+            tank.navState = "SCANNING";
         }
 
         if (!tank.isDestroyed && explorationManager.isAutoExploreActive()) {
             ArrayList<SensorDetection> detections = tank.scan(
-                    ((tanks_bas_v1_0)parent).allTanks,
-                    ((tanks_bas_v1_0)parent).allTrees
+                    ((tanks_bas_v1_0) parent).allTanks,
+                    ((tanks_bas_v1_0) parent).allTrees
             );
             ExplorationManager.NavigationState navState = explorationManager.navStates.get(tank);
 
-            // Try to shoot
-            if (isLockedOn) {
+            if (tank.losSensor.getIsLockedOn() && tank.losSensor.lockedTarget != null) {
+                if (tank.losSensor.lockedTarget.isDestroyed) {
+                    tank.losSensor.lockedTarget = null;
+                    tank.losSensor.setIsLockedOn(false);
+                    currentState = AgentState.EXPLORING;
+                    return;
+                }
+
+                tank.state = 9;
                 tank.fire();
             }
-            /*
-            for (SensorDetection detection : detections) {
-                if (detection.type == SensorDetection.ObjectType.ENEMY && navState == ExplorationManager.NavigationState.WAITING_OUTSIDE_ENEMY_BASE) {
-                    // Enemy detected - determine if we should attack
-                    float distance = PVector.dist(tank.position, detection.position);
-                    if (distance < 400) { // Within attack range
-                        currentState = AgentState.ATTACKING;
-
-                        // Face the enemy
-
-                        break;
-                    }
-                }
-            }
-            */
         }
     }
-
-    void faceTarget(Tank target) {
-        if (target == null) return;
-
-        PVector direction = PVector.sub(target.position, tank.position);
-        faceDirection(direction);
-    }
-
-    void faceDirection(PVector direction) {
+    /**
+     * Sets tank direction to face a specific direction vector.
+     * @param direction The direction vector to face toward
+     */
+    void faceDirection(PVector direction) { //this unfortunately collided with the tank states and the lock on, easiest solution was to simply not use it.
         direction.normalize();
 
-        // Determine which of the 8 directions is closest
         float angle = PApplet.atan2(direction.y, direction.x);
 
-        // Convert to 8-way direction (0-7)
-        int octant = (int)(8 * (angle + PApplet.PI) / (2 * PApplet.PI) + 0.5) % 8;
+        int octant = (int) (8 * (angle + PApplet.PI) / (2 * PApplet.PI) + 0.5) % 8;
 
-        // Map octant to tank state
         switch (octant) {
-            case 0: tank.state = 1; break; // Right
-            case 1: tank.state = 5; break; // Right+Down
-            case 2: tank.state = 3; break; // Down
-            case 3: tank.state = 7; break; // Left+Down
-            case 4: tank.state = 2; break; // Left
-            case 5: tank.state = 8; break; // Left+Up
-            case 6: tank.state = 4; break; // Up
-            case 7: tank.state = 6; break; // Right+Up
+            case 0:
+                tank.state = 1;
+                break; // Right
+            case 1:
+                tank.state = 5;
+                break; // Right+Down
+            case 2:
+                tank.state = 3;
+                break; // Down
+            case 3:
+                tank.state = 7;
+                break; // Left+Down
+            case 4:
+                tank.state = 2;
+                break; // Left
+            case 5:
+                tank.state = 8;
+                break; // Left+Up
+            case 6:
+                tank.state = 4;
+                break; // Up
+            case 7:
+                tank.state = 6;
+                break; // Right+Up
         }
     }
-
+    /**
+     * Checks if this agent's tank is currently locked onto a target.
+     * @return true if tank is locked onto an enemy target
+     */
     public boolean isLockedOn() {
-        return isLockedOn && currentState == AgentState.LOCKED_ON;
+        return tank.losSensor.getIsLockedOn() && currentState == AgentState.LOCKED_ON;
     }
-
-    // Method to get the locked target (for visual feedback)
+    /**
+     * Gets the currently locked target for external monitoring.
+     * @return The tank that is currently locked onto, or null
+     */
     public Tank getLockedTarget() {
-        return lockedTarget;
+        return tank.losSensor.lockedTarget;
     }
-
+    /**
+     * Checks if auto-exploration mode is currently active.
+     * @return true if auto-exploration is enabled
+     */
     void borderCollisionHandle() {
         parent.println("Border collision detected - adjusting navigation");
 
@@ -254,17 +256,14 @@ public class TankAgent {
         ExplorationManager.NavigationState navState = explorationManager.navStates.get(tank);
         Node targetNode = explorationManager.targetNodes.get(tank);
 
-        // Don't handle border collisions if tank is waiting at home or locked on
         if (navState == ExplorationManager.NavigationState.WAITING_AT_HOME || currentState == AgentState.LOCKED_ON) {
             return;
         }
 
-        if (navState == ExplorationManager.NavigationState.RETURNING_HOME) {
-            // If returning home and hitting a border, recalculate path to individual base node
+        if (navState == ExplorationManager.NavigationState.RETURNING_HOME || navState == ExplorationManager.NavigationState.POSITION_AROUND_ENEMY_BASE) {
             explorationManager.recalculatePathFromCurrentPosition(tank);
             return;
         }
-
         if (navState == ExplorationManager.NavigationState.MOVING_TO_TARGET) {
             if (targetNode != null) {
                 stuckCounter++;
@@ -285,7 +284,7 @@ public class TankAgent {
                 }
             }
         } else {
-            PVector center = new PVector(parent.width/2, parent.height/2);
+            PVector center = new PVector(parent.width / 2, parent.height / 2);
             PVector directionToCenter = PVector.sub(center, tank.position);
             directionToCenter.normalize();
 
@@ -306,11 +305,17 @@ public class TankAgent {
             explorationManager.addNode(boundaryX, boundaryY);
         }
     }
-
+    /**
+     * Checks if auto-exploration mode is currently active.
+     * @return true if auto-exploration is enabled
+     */
     boolean isAutoExploreActive() {
         return explorationManager.isAutoExploreActive();
     }
-
+    /**
+     * Sets the pathfinding algorithm to use for navigation.
+     * @param algorithm "Dijkstra" or "A*" algorithm selection
+     */
     void setPathfindingAlgorithm(String algorithm) {
         if (algorithm.equals("Dijkstra")) {
             explorationManager.testDijkstra = true;
@@ -318,13 +323,16 @@ public class TankAgent {
             explorationManager.testDijkstra = false;
         }
     }
-
-    boolean shouldHandleCollision(){
+    /**
+     * Determines if collision handling should be active based on current state.
+     * @return true if collisions should be processed, false to ignore
+     */
+    boolean shouldHandleCollision() {
         ExplorationManager.NavigationState navState = explorationManager.navStates.get(tank);
-
-        if(navState == ExplorationManager.NavigationState.POSITION_AROUND_ENEMY_BASE) return false;
-        else if(navState == ExplorationManager.NavigationState.WAITING_AT_HOME) return false;
-        else if(navState == ExplorationManager.NavigationState.ATTACK_MODE) return false;
+        if (tank.state == 9) return false;
+        if (navState == ExplorationManager.NavigationState.POSITION_AROUND_ENEMY_BASE) return false;
+        else if (navState == ExplorationManager.NavigationState.WAITING_AT_HOME) return false;
+        else if (navState == ExplorationManager.NavigationState.ATTACK_MODE) return false;
         return true;
     }
 }

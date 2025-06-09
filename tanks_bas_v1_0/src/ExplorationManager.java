@@ -1,4 +1,5 @@
 import processing.core.*;
+
 import java.util.*;
 
 /**
@@ -19,11 +20,11 @@ class ExplorationManager {
 
     ArrayList<Node> nodes;
     ArrayList<Edge> edges;
-    HashMap<Tank, Node> currentNodes; // Track current node for each tank
-    HashMap<Tank, Node> targetNodes;  // Track target node for each tank
-    HashMap<Tank, Node> baseNodes;    // Each tank has its own base node
+    HashMap<Tank, Node> currentNodes;
+    HashMap<Tank, Node> targetNodes;
+    HashMap<Tank, Node> baseNodes;
     HashMap<Tank, Node> enemyBaseNodes;
-    HashMap<Tank, ArrayList<PVector>> paths; // Track path for each tank
+    HashMap<Tank, ArrayList<PVector>> paths;
     Random random;
 
     List<Tank> tanks;
@@ -37,7 +38,7 @@ class ExplorationManager {
     HashMap<Tank, Integer> samePositionCounters;
     HashMap<Tank, NavigationState> navStates;
     HashMap<Tank, Long> lastTargetUpdateTime;
-    HashMap<Tank, Long> homeArrivalTime; // Track when each tank arrived home
+    HashMap<Tank, Long> homeArrivalTime;
     Long allTanksHomeTime;
 
     int clearedPixels;
@@ -63,10 +64,11 @@ class ExplorationManager {
     }
 
     /**
-     * Creates a new ExplorationManager with the specified visibility radius.
+     * Constructor for the ExplorationManager.
+     * Initializes fog of war, navigation systems, and background thread for coordinated attacks.
      *
-     * @param parent The Processing PApplet this manager belongs to
-     * @param visibilityRadius The radius around the tank that is visible/explored
+     * @param parent           The Processing PApplet instance
+     * @param visibilityRadius The radius around tanks that becomes visible/explored
      */
     ExplorationManager(PApplet parent, float visibilityRadius) {
         this.parent = parent;
@@ -82,7 +84,7 @@ class ExplorationManager {
         this.tanks = new ArrayList<Tank>();
         this.currentNodes = new HashMap<Tank, Node>();
         this.targetNodes = new HashMap<Tank, Node>();
-        this.baseNodes = new HashMap<Tank, Node>();  // New: individual base nodes
+        this.baseNodes = new HashMap<Tank, Node>();
         this.paths = new HashMap<Tank, ArrayList<PVector>>();
         this.random = new Random();
         this.autoExplore = false;
@@ -104,19 +106,18 @@ class ExplorationManager {
 
         threadInstane = new Thread(() -> {
 
-            while(!Thread.currentThread().isInterrupted()) {
-                if(areAllTanksHome()){
+            while (!Thread.currentThread().isInterrupted()) {
+                if (areAllTanksHome()) {
                     try {
-                        //System.out.println("passed");
                         Thread.sleep(3000);
 
                         for (Tank tank : tanks) {
-                                navStates.put(tank, NavigationState.ATTACK_MODE);
+                            navStates.put(tank, NavigationState.ATTACK_MODE);
                         }
-                        if(!isAutoExploreActive()) {
+                        if (!isAutoExploreActive()) {
                             toggleAutoExplore();
                         }
-                    }catch (InterruptedException e) {
+                    } catch (InterruptedException e) {
                         Thread.currentThread().interrupt();
                         break;
                     }
@@ -131,10 +132,10 @@ class ExplorationManager {
     }
 
     /**
-     * Adds a tank to be managed by this exploration manager.
-     * Creates a starting node at the tank's position if needed and assigns it as the tank's base node.
+     * Adds a tank to be managed by this exploration system.
+     * Creates navigation state, base nodes, and initializes all tracking data.
      *
-     * @param tank The tank to be added to this manager
+     * @param tank The tank to add to the exploration system
      */
     void addTank(Tank tank) {
         if (tank == null || tanks.contains(tank)) {
@@ -143,7 +144,6 @@ class ExplorationManager {
 
         tanks.add(tank);
 
-        // Initialize all the maps for this tank
         previousDirections.put(tank, new PVector(0, 0));
         stuckCounters.put(tank, 0);
         lastPositions.put(tank, tank.position.copy());
@@ -153,7 +153,6 @@ class ExplorationManager {
         paths.put(tank, new ArrayList<PVector>());
         homeArrivalTime.put(tank, 0L);
 
-        // Create or find a base node for this tank
         Node tankBaseNode = null;
         for (Node existingNode : nodes) {
             if (PVector.dist(existingNode.position, tank.position) < minNodeDistance) {
@@ -167,18 +166,17 @@ class ExplorationManager {
             nodes.add(tankBaseNode);
         }
 
-        // Assign this node as both current and base node for the tank
         currentNodes.put(tank, tankBaseNode);
-        baseNodes.put(tank, tankBaseNode);  // Each tank gets its own base node
+        baseNodes.put(tank, tankBaseNode);
 
-        // Add to visited positions
         visitedPositions.add(tank.position.copy());
     }
 
     /**
-     * Removes a tank from being managed by this exploration manager.
+     * Removes a tank from the exploration management system.
+     * Cleans up all associated navigation data and references.
      *
-     * @param tank The tank to remove
+     * @param tank The tank to remove from management
      */
     void removeTank(Tank tank) {
         if (!tanks.contains(tank)) {
@@ -188,7 +186,7 @@ class ExplorationManager {
         tanks.remove(tank);
         currentNodes.remove(tank);
         targetNodes.remove(tank);
-        baseNodes.remove(tank);  // Remove the tank's base node reference
+        baseNodes.remove(tank);
         previousDirections.remove(tank);
         stuckCounters.remove(tank);
         lastPositions.remove(tank);
@@ -200,8 +198,8 @@ class ExplorationManager {
     }
 
     /**
-     * Initializes the fog of war layer.
-     * Creates a graphic layer for the fog and sets it to fully opaque.
+     * Initializes the fog of war graphics layer.
+     * Creates the fog overlay and sets up pixel tracking for exploration percentage.
      */
     void initializeFog() {
         if (parent.width > 0 && parent.height > 0) {
@@ -217,9 +215,8 @@ class ExplorationManager {
     }
 
     /**
-     * Updates the positions of all tanks in the exploration graph.
-     * Detects if tanks are stuck, adds visited positions for fog clearing,
-     * and creates new nodes when in unexplored territory.
+     * Updates the positions of all managed tanks in the exploration graph.
+     * Handles stuck detection, node creation, and visited position tracking.
      */
     void updateTankPositions() {
         for (Tank tank : tanks) {
@@ -228,9 +225,10 @@ class ExplorationManager {
     }
 
     /**
-     * Updates a specific tank's position in the exploration graph.
-     * Detects if the tank is stuck, adds visited positions for fog clearing,
-     * and creates new nodes when in unexplored territory.
+     * Updates a specific tank's position and navigation state.
+     * Handles stuck detection, creates new nodes in unexplored areas.
+     *
+     * @param tank The tank to update
      */
     private void updateTankPosition(Tank tank) {
         if (tank == null) return;
@@ -238,7 +236,6 @@ class ExplorationManager {
         PVector lastPosition = lastPositions.get(tank);
         int samePositionCounter = samePositionCounters.get(tank);
 
-        // Only check for stuck tanks if auto-exploration is active
         if (autoExplore && PVector.dist(tank.position, lastPosition) < 1.0f) {
             samePositionCounter++;
             if (samePositionCounter > 60) {
@@ -273,40 +270,41 @@ class ExplorationManager {
         }
 
         if (findClosestNode(tank.position) == null ||
-                PVector.dist(findClosestNode(tank.position).position, tank.position) > maxNodeDistance/2) {
+                PVector.dist(findClosestNode(tank.position).position, tank.position) > maxNodeDistance / 2) {
             addNode(tank.position.x, tank.position.y);
         }
     }
 
     /**
-     * Handles a tank that appears to be stuck in one position.
-     * Changes direction randomly to attempt to escape the stuck position.
+     * Handles a tank that appears to be stuck by changing its direction randomly.
+     * Attempts to help the tank escape from stuck positions.
+     *
+     * @param tank The tank that appears to be stuck
      */
     void handleStuckTank(Tank tank) {
-        //parent.println(tank.name + " appears stuck - changing direction");
 
         float randomAngle = random.nextFloat() * PApplet.TWO_PI;
         PVector escapeDirection = new PVector(PApplet.cos(randomAngle), PApplet.sin(randomAngle));
-
-        if (Math.abs(escapeDirection.x) > Math.abs(escapeDirection.y)) {
-            tank.state = escapeDirection.x > 0 ? 1 : 2;
-            parent.println("1");
-        } else {
-            tank.state = escapeDirection.y > 0 ? 3 : 4;
-            parent.println("2");
+        if (navStates.get(tank) != NavigationState.POSITION_AROUND_ENEMY_BASE || navStates.get(tank) != NavigationState.ATTACK_MODE) {
+            if (Math.abs(escapeDirection.x) > Math.abs(escapeDirection.y)) {
+                tank.state = escapeDirection.x > 0 ? 1 : 2;
+                parent.println("1");
+            } else {
+                tank.state = escapeDirection.y > 0 ? 3 : 4;
+                parent.println("2");
+            }
         }
 
-
-        if (targetNodes.containsKey(tank) && targetNodes.get(tank) != null && navStates.get(tank) != NavigationState.RETURNING_HOME && navStates.get(tank) != NavigationState.POSITION_AROUND_ENEMY_BASE ) {
+        if (targetNodes.containsKey(tank) && targetNodes.get(tank) != null && navStates.get(tank) != NavigationState.RETURNING_HOME && navStates.get(tank) != NavigationState.POSITION_AROUND_ENEMY_BASE) {
             navStates.put(tank, NavigationState.EXPLORING);
             targetNodes.put(tank, null);
         }
     }
 
     /**
-     * Finds the closest node to a given position.
+     * Finds the closest navigation node to a given position.
      *
-     * @param position Position to find the closest node to
+     * @param position The position to find the closest node to
      * @return The closest Node, or null if no nodes exist
      */
     Node findClosestNode(PVector position) {
@@ -327,16 +325,15 @@ class ExplorationManager {
     }
 
     /**
-     * Adds a new node at the specified coordinates to the exploration graph.
-     * Attempts to connect the new node to nearby nodes if possible.
+     * Creates a new navigation node at the specified coordinates.
+     * Attempts to connect the new node to nearby visible nodes.
      *
      * @param x X-coordinate for the new node
      * @param y Y-coordinate for the new node
      * @return The newly created Node
      */
     Node addNode(float x, float y) {
-        // Check if a node already exists nearby
-        if (!enemyDetected){
+        if (!enemyDetected) {
             for (Node existingNode : nodes) {
                 if (PVector.dist(existingNode.position, new PVector(x, y)) < minNodeDistance) {
                     return existingNode;
@@ -348,7 +345,6 @@ class ExplorationManager {
         nodes.add(newNode);
         connectToVisibleNodes(newNode);
 
-        // Update current nodes for tanks that are close to this new node
         for (Tank tank : tanks) {
             if (PVector.dist(newNode.position, tank.position) < 30) {
                 currentNodes.put(tank, newNode);
@@ -359,8 +355,7 @@ class ExplorationManager {
     }
 
     /**
-     * Attempts to connect a node to all visible nearby nodes.
-     * A connection is made if the nodes are within range and have line of sight.
+     * Connects a node to all visible nearby nodes within connection range.
      *
      * @param node The node to connect to other nodes
      */
@@ -375,22 +370,19 @@ class ExplorationManager {
     }
 
     /**
-     * Checks if there is line of sight between two positions.
-     * Uses the collision system to check for obstacles.
+     * Checks line of sight between two positions, considering tree obstructions.
      *
      * @param from Starting position
-     * @param to Ending position
+     * @param to   Ending position
      * @return true if there is clear line of sight, false if obstructed
      */
     boolean canSee(PVector from, PVector to) {
         if (parent instanceof tanks_bas_v1_0) {
             tanks_bas_v1_0 game = (tanks_bas_v1_0) parent;
-            // Get trees directly from the game instead of calling collisions
             Tree[] treesToCheck = game.allTrees;
             if (treesToCheck != null) {
                 for (Tree tree : treesToCheck) {
                     if (tree != null) {
-                        // Use local lineIntersectsTree method instead of calling collisions
                         if (lineIntersectsTree(from, to, tree.position, tree.radius + 10)) {
                             return false;
                         }
@@ -402,11 +394,11 @@ class ExplorationManager {
     }
 
     /**
-     * Creates a bidirectional connection between two nodes with a specified weight.
+     * Creates a bidirectional connection between two nodes.
      *
-     * @param node1 First node to connect
-     * @param node2 Second node to connect
-     * @param weight Weight/cost of the connection
+     * @param node1  First node to connect
+     * @param node2  Second node to connect
+     * @param weight The cost/weight of the connection
      */
     void connectNodes(Node node1, Node node2, float weight) {
         Edge edge = new Edge(node1, node2, weight);
@@ -418,21 +410,18 @@ class ExplorationManager {
     /**
      * Checks if auto-exploration mode is currently active.
      *
-     * @return true if auto-exploration is active, false otherwise
+     * @return true if auto-exploration is enabled, false otherwise
      */
     public boolean isAutoExploreActive() {
         return autoExplore;
     }
 
     /**
-     * Toggles the auto-exploration mode on or off for all tanks.
-     * When enabled, tanks will automatically explore the environment.
-     * When disabled, tanks will stop moving.
+     * Toggles auto-exploration mode for all managed tanks.
+     * When enabled, tanks autonomously explore the environment.
      */
     void toggleAutoExplore() {
         autoExplore = !autoExplore;
-
-
 
         if (autoExplore) {
             parent.println("Auto-exploration enabled");
@@ -448,24 +437,23 @@ class ExplorationManager {
     }
 
     /**
-     * Main navigation method that controls all tanks' movement.
-     * Handles different navigation states for each tank: exploring, moving to target,
-     * backtracking, and returning home.
+     * Main navigation control method for all tanks.
+     * Handles different navigation states and coordinates group behaviors.
      */
     void navigation() {
         if (!autoExplore) return;
 
-        if(areAllTanksHome()){
+        if (areAllTanksHome()) {
             if (enemyDetected && !attacking) {
                 startCoordinatedAttack(detectedEnemyBase);
 
             }
-        }else if(areAllTanksOutsideEnemyBase()){
+        } else if (areAllTanksOutsideEnemyBase()) {
             for (Tank tank : tanks) {
                 navStates.put(tank, NavigationState.ATTACK_MODE);
                 navigateTank(tank);
             }
-        }else {
+        } else {
             for (Tank tank : tanks) {
                 navigateTank(tank);
             }
@@ -473,7 +461,9 @@ class ExplorationManager {
     }
 
     /**
-     * Handles navigation for a specific tank.
+     * Handles navigation logic for an individual tank based on its current state.
+     *
+     * @param tank The tank to navigate
      */
     private void navigateTank(Tank tank) {
 
@@ -488,13 +478,11 @@ class ExplorationManager {
                 ArrayList<PVector> path = paths.get(tank);
                 int startPositionCounter = startPositionCounters.get(tank);
 
-                // Check if tank has reached home base
                 Node tankBaseNode = baseNodes.get(tank);
                 if (tankBaseNode != null &&
                         Math.abs(tankBaseNode.position.x - tank.position.x) < 5 &&
                         Math.abs(tankBaseNode.position.y - tank.position.y) < 5) {
 
-                    // Tank has reached home - set to waiting state
                     navStates.put(tank, NavigationState.WAITING_AT_HOME);
                     targetNodes.put(tank, null);
                     tank.state = 0; // Stop moving
@@ -504,7 +492,7 @@ class ExplorationManager {
                     if (!homeArrivalTime.containsKey(tank) || homeArrivalTime.get(tank) == 0L) {
                         homeArrivalTime.put(tank, System.currentTimeMillis());
                     }
-                    return; // Exit early
+                    return;
                 }
 
                 if (targetNode != null && PVector.dist(tank.position, targetNode.position) < 20) {
@@ -566,20 +554,19 @@ class ExplorationManager {
 
                 Node attackNode = enemyBaseNodes.get(tank);
 
-                if(attackNode != null &&
+                if (attackNode != null &&
                         Math.abs(attackNode.position.x - tank.position.x) < 10 &&
                         Math.abs(attackNode.position.y - tank.position.y) < 10) {
 
-                    // Tank has reached home - set to waiting state
                     navStates.put(tank, NavigationState.WAITING_OUTSIDE_ENEMY_BASE);
                     targetNodes.put(tank, null);
-                    tank.state = 0; // Stop moving
+                    tank.state = 0;
                     tank.navState = "Waiting outside enemy base";
 
                     if (!homeArrivalTime.containsKey(tank) || homeArrivalTime.get(tank) == 0L) {
                         homeArrivalTime.put(tank, System.currentTimeMillis());
                     }
-                    return; // Exit early
+                    return;
                 }
 
                 if (targetNode != null && PVector.dist(tank.position, targetNode.position) < 20) {
@@ -603,7 +590,7 @@ class ExplorationManager {
 
             case WAITING_AT_HOME:
                 tank.navState = "Waiting at Home";
-                tank.state = 0; // Keep tank stationary
+                tank.state = 0;
                 break;
 
             case WAITING_OUTSIDE_ENEMY_BASE:
@@ -615,25 +602,56 @@ class ExplorationManager {
             case ATTACK_MODE:
                 tank.navState = "Attacking";
                 combatMode = true;
-                if(PVector.dist(tank.position, enemyBaseNodes.get(tank).position) > 30) {
+                if (PVector.dist(tank.position, enemyBaseNodes.get(tank).position) > 30) {
                     targetNodes.put(tank, enemyBaseNodes.get(tank));
-                    moveTowardTarget(tank); //bråkar med den här, den här ändrar states
-                }
-                else if(PVector.dist(tank.position, enemyBaseNodes.get(tank).position) > 15 && PVector.dist(tank.position, enemyBaseNodes.get(tank).position) < 30) {
+                    moveTowardTarget(tank);
+                } else if (PVector.dist(tank.position, enemyBaseNodes.get(tank).position) > 15 && PVector.dist(tank.position, enemyBaseNodes.get(tank).position) < 30) {
                     tank.state = random.nextInt(1, 6);
                 }
                 break;
         }
     }
 
+    /**
+     * Recalculates the path for a tank from its current position to its target.
+     * Used when tanks get stuck or need to find new routes.
+     *
+     * @param tank The tank to recalculate the path for
+     */
     void recalculatePathFromCurrentPosition(Tank tank) {
         Node currentNode = findClosestNode(tank.position);
         if (currentNode == null || PVector.dist(currentNode.position, tank.position) > minNodeDistance) {
             currentNode = addNode(tank.position.x, tank.position.y);
         }
         currentNodes.put(tank, currentNode);
+        if (navStates.get(tank) == NavigationState.POSITION_AROUND_ENEMY_BASE) {
+            Node enemyBase = enemyBaseNodes.get(tank);
+            if (enemyBase == null) {
+                parent.println("Warning: No base node found for tank " + tank.name);
+                return;
+            }
 
-        // Use the tank's individual base node instead of a shared baseNode
+            ArrayList<Node> pathingToEnemyBase;
+            if (testDijkstra) {
+                pathingToEnemyBase = dijkstra(currentNode, enemyBase);
+            } else {
+                pathingToEnemyBase = aStar(currentNode, enemyBase);
+            }
+
+            ArrayList<PVector> path = new ArrayList<>();
+            if (!pathingToEnemyBase.isEmpty()) {
+                for (Node node : pathingToEnemyBase) {
+                    path.add(node.position.copy());
+                }
+                paths.put(tank, path);
+
+                if (pathingToEnemyBase.size() > 1) {
+                    targetNodes.put(tank, pathingToEnemyBase.get(0));
+                } else {
+                    targetNodes.put(tank, enemyBase);
+                }
+            }
+        }
         Node tankBaseNode = baseNodes.get(tank);
         if (tankBaseNode == null) {
             parent.println("Warning: No base node found for tank " + tank.name);
@@ -663,8 +681,9 @@ class ExplorationManager {
     }
 
     /**
-     * Moves a tank toward its current target node.
-     * Sets the tank's state (direction) based on the direction to the target.
+     * Moves a tank toward its current target node by setting appropriate direction.
+     *
+     * @param tank The tank to move toward its target
      */
     void moveTowardTarget(Tank tank) {
         Node targetNode = targetNodes.get(tank);
@@ -698,22 +717,17 @@ class ExplorationManager {
     }
 
     /**
-     * Selects the next target node for a tank's exploration.
-     * Prioritizes unvisited nodes that are visible and not in the home base.
-     * Also avoids nodes near other tanks to prevent tanks from crossing paths.
+     * Selects the next exploration target for a tank using sensor data.
+     * Prioritizes unvisited nodes and avoids obstacles and other tanks.
      *
-     * @param tank The tank to select an exploration target for
-     * @return The selected node for exploration, or null if no suitable node was found
-     */
-    /**
-     * Selects the next target node for a tank's exploration.
-     * Now uses the tank's sensor data to make better decisions.
+     * @param tank The tank to select a target for
+     * @return The selected Node for exploration, or null if none found
      */
     Node selectExplorationTarget(Tank tank) {
         ArrayList<Node> candidates = new ArrayList<Node>();
         ArrayList<SensorDetection> sensorData = tank.scan(
-                ((tanks_bas_v1_0)parent).allTanks,
-                ((tanks_bas_v1_0)parent).allTrees
+                ((tanks_bas_v1_0) parent).allTanks,
+                ((tanks_bas_v1_0) parent).allTrees
         );
 
         // Check if there are any obstacles in our immediate path
@@ -738,7 +752,6 @@ class ExplorationManager {
         }
 
         if (!candidates.isEmpty()) {
-            // Find the closest candidate
             Node closest = null;
             float minDist = Float.MAX_VALUE;
 
@@ -753,7 +766,6 @@ class ExplorationManager {
             return closest;
         }
 
-        // If no good candidates, try to identify direction with clearest path
         if (obstacleAhead) {
             float clearest = 0;
             float clearestAngle = 0;
@@ -796,24 +808,21 @@ class ExplorationManager {
     }
 
     /**
-     * Checks if a position is too close to other tanks.
-     * Used to prevent tanks from selecting targets that would cause them to cross paths.
+     * Checks if a position is too close to other tanks to avoid path conflicts.
      *
-     * @param position Position to check
-     * @param excludeTank Tank to exclude from the check
+     * @param position    The position to check
+     * @param excludeTank The tank to exclude from the proximity check
      * @return true if the position is too close to another tank
      */
     boolean isNearOtherTank(PVector position, Tank excludeTank) {
-        float minDistance = 75.0f; // Minimum distance to keep between tanks
+        float minDistance = 75.0f;
 
         for (Tank otherTank : tanks) {
             if (otherTank != excludeTank) {
-                // Check distance to other tank
                 if (PVector.dist(position, otherTank.position) < minDistance) {
                     return true;
                 }
 
-                // Also check if position is close to other tank's target
                 Node otherTargetNode = targetNodes.get(otherTank);
                 if (otherTargetNode != null &&
                         PVector.dist(position, otherTargetNode.position) < minDistance) {
@@ -826,8 +835,10 @@ class ExplorationManager {
     }
 
     /**
-     * Expands the exploration graph using Rapidly-exploring Random Tree (RRT) algorithm.
-     * Creates new nodes in unexplored areas to guide exploration when no valid targets exist.
+     * Expands the exploration graph using Rapidly-exploring Random Tree (RRT).
+     * Creates new nodes in unexplored areas when no valid targets exist.
+     *
+     * @param tank The tank requesting graph expansion
      */
     void expandRRT(Tank tank) {
         for (int attempts = 0; attempts < 10; attempts++) {
@@ -841,7 +852,7 @@ class ExplorationManager {
             }
 
             Node nearest = findClosestNode(tank.position);
-            if(nearest == null) continue;
+            if (nearest == null) continue;
 
             PVector direction = PVector.sub(randomPoint, nearest.position);
             direction.normalize();
@@ -862,13 +873,11 @@ class ExplorationManager {
     }
 
     /**
-     * Checks if a position is valid for creating a new node.
-     * Validates that the position is not in a home base, not too close to existing nodes,
-     * not too close to other tanks, and not colliding with obstacles.
+     * Validates if a position is suitable for creating a new navigation node.
      *
-     * @param pos Position to validate
+     * @param pos         The position to validate
      * @param excludeTank Tank to exclude from proximity checks
-     * @return true if the position is valid for a new node, false otherwise
+     * @return true if the position is valid for a new node
      */
     boolean isValidNodePosition(PVector pos, Tank excludeTank) {
         if (isInHomeBase(pos) || isNearOtherTank(pos, excludeTank)) {
@@ -880,7 +889,6 @@ class ExplorationManager {
                 return false;
             }
         }
-
         if (parent instanceof tanks_bas_v1_0) {
             tanks_bas_v1_0 game = (tanks_bas_v1_0) parent;
             if (game.allTrees != null) {
@@ -901,20 +909,21 @@ class ExplorationManager {
     }
 
     /**
-     * Checks if a line between two points intersects with a tree.
-     * Used for line-of-sight and path planning calculations.
+     * Checks if a line intersects with a circular tree (local implementation).
+     *
+     * @param start  Starting point of the line
+     * @param end    Ending point of the line
+     * @param center Center of the tree
+     * @param radius Radius of the tree
+     * @return true if the line intersects the tree
      */
     boolean lineIntersectsTree(PVector start, PVector end, PVector center, float radius) {
-        // Direct implementation instead of calling collisions
         PVector d = PVector.sub(end, start);
         PVector f = PVector.sub(start, center);
-
         float a = d.dot(d);
         float b = 2 * f.dot(d);
         float c = f.dot(f) - radius * radius;
-
         float discriminant = b * b - 4 * a * c;
-
         if (discriminant < 0) {
             return false;
         } else {
@@ -925,10 +934,15 @@ class ExplorationManager {
         }
     }
 
-    boolean areAllTanksHome(){
-        // First check if all tanks are actually at their home positions
+    /**
+     * Checks if all tanks are currently at their home base positions.
+     * Only returns true if enemy has been detected (ready for attack phase).
+     *
+     * @return true if all tanks are home and enemy detected
+     */
+    boolean areAllTanksHome() {
         int tanksAtHome = 0;
-        for(Tank tank : tanks){
+        for (Tank tank : tanks) {
             Node baseNode = baseNodes.get(tank);
             if (baseNode != null &&
                     Math.abs(baseNode.position.x - tank.position.x) < 5 &&
@@ -937,14 +951,17 @@ class ExplorationManager {
             }
         }
 
-        // Only return true if ALL tanks are physically at home AND enemy has been detected
         return (tanksAtHome == tanks.size()) && enemyDetected;
     }
 
-    boolean areAllTanksOutsideEnemyBase(){
-        // First check if all tanks are actually at their home positions
+    /**
+     * Checks if all tanks have reached their assigned attack positions near enemy base.
+     *
+     * @return true if all tanks are positioned for attack
+     */
+    boolean areAllTanksOutsideEnemyBase() {
         int tanksAtHome = 0;
-        for(Tank tank : tanks){
+        for (Tank tank : tanks) {
             Node enemyBaseNodes = this.enemyBaseNodes.get(tank);
             if (enemyBaseNodes != null &&
                     Math.abs(enemyBaseNodes.position.x - tank.position.x) < 10 &&
@@ -953,33 +970,27 @@ class ExplorationManager {
             }
         }
 
-        // Only return true if ALL tanks are physically at home AND enemy has been detected
         return (tanksAtHome == tanks.size()) && enemyDetected;
     }
 
     /**
-     * Checks if a position is inside a home base.
+     * Determines if a position is within any home base boundary.
      *
-     * @param position Position to check
-     * @return true if the position is in a home base, false otherwise
+     * @param position The position to check
+     * @return true if position is in a home base
      */
     boolean isInHomeBase(PVector position) {
         if (position.x >= 0 && position.x <= 150 &&
                 position.y >= 0 && position.y <= 350) {
-            return true; // Team 0 (red) base
+            return true;
         }
-
-        if (position.x >= parent.width - 100 && position.x <= parent.width &&
-                position.y >= parent.height - 400 && position.y <= parent.height) {
-            return true; // Team 1 (blue) base
-        }
-
-        return false;
+        return position.x >= parent.width - 100 && position.x <= parent.width &&
+                position.y >= parent.height - 400 && position.y <= parent.height;
     }
 
     /**
-     * Updates the fog of war based on visited positions.
-     * Calculates the percentage of the map that has been explored.
+     * Updates the fog of war based on all visited positions.
+     * Calculates and updates the exploration percentage.
      */
     void updateFog() {
         if (!initialized) return;
@@ -992,7 +1003,6 @@ class ExplorationManager {
 
         for (PVector pos : visitedPositions) {
             float diameter = 100.0f; // Default FOV
-            // Find if any tank is near this position for FOV
             for (Tank tank : tanks) {
                 if (PVector.dist(tank.position, pos) < 30) {
                     diameter = tank.fieldOfView;
@@ -1005,8 +1015,6 @@ class ExplorationManager {
         }
 
         fogLayer.endDraw();
-
-        // Count cleared pixels
         fogLayer.loadPixels();
         clearedPixels = 0;
         for (int i = 0; i < totalPixels; i++) {
@@ -1021,17 +1029,15 @@ class ExplorationManager {
     }
 
     /**
-     * Displays the exploration graph and fog of war.
-     * Shows nodes, connections, and the exploration percentage.
+     * Renders the exploration visualization including nodes, edges, and fog of war.
+     * Shows current exploration status and navigation graph.
      */
     void display() {
-        // Display nodes
         for (Node node : nodes) {
             boolean isCurrentNode = false;
             boolean isTargetNode = false;
             boolean isBaseNode = false;
 
-            // Check if this node is a current, target, or base node for any tank
             for (Tank tank : tanks) {
                 if (currentNodes.containsKey(tank) && node == currentNodes.get(tank)) {
                     isCurrentNode = true;
@@ -1045,7 +1051,7 @@ class ExplorationManager {
             }
 
             if (isBaseNode) {
-                parent.fill(0, 0, 255); // Blue for base nodes
+                parent.fill(0, 0, 255);
             } else if (isCurrentNode) {
                 parent.fill(0, 200, 0);
             } else if (isTargetNode) {
@@ -1071,19 +1077,19 @@ class ExplorationManager {
         }
         parent.strokeWeight(1);
 
-        // Display fog of war
         if (initialized) {
             parent.image(fogLayer, 0, 0);
         }
 
-        // Display exploration percentage
         parent.fill(0);
         parent.text(parent.nf(exploredPercent, 1, 2) + "% explored", 20, 20);
     }
 
     /**
-     * Initiates the return home sequence for a tank.
-     * Calculates a path back to the tank's individual home base node using A* pathfinding.
+     * Initiates the return home sequence for a specific tank.
+     * Calculates optimal path back to the tank's individual base node.
+     *
+     * @param tank The tank to send home
      */
     void returnHome(Tank tank) {
         navStates.put(tank, NavigationState.RETURNING_HOME);
@@ -1095,7 +1101,6 @@ class ExplorationManager {
         }
         currentNodes.put(tank, closestNode);
 
-        // Use the tank's individual base node instead of a shared baseNode
         Node tankBaseNode = baseNodes.get(tank);
         if (tankBaseNode == null) {
             parent.println("Warning: No base node found for tank " + tank.name);
@@ -1128,10 +1133,9 @@ class ExplorationManager {
     }
 
     /**
-     * Initiates the return home sequence for all tanks.
+     * Initiates return home sequence for all managed tanks simultaneously.
      */
     void returnAllHome() {
-        // Reset the all-tanks-home timer when starting return sequence
         allTanksHomeTime = null;
 
         for (Tank tank : tanks) {
@@ -1140,13 +1144,13 @@ class ExplorationManager {
     }
 
     /**
-     * Implements Dijkstra's algorithm to find the shortest path between start and goal nodes.
+     * Implements Dijkstra's shortest path algorithm between two nodes.
      *
-     * @param start The starting node for the path finding algorithm
-     * @param goal The destination node to find a path to
-     * @return An ArrayList of Nodes representing the shortest path from start to goal
+     * @param start The starting node
+     * @param goal  The destination node
+     * @return List of nodes representing the shortest path
      */
-    ArrayList<Node> dijkstra(Node start, Node goal){
+    ArrayList<Node> dijkstra(Node start, Node goal) {
         Set<Node> visitedNodes = new HashSet<>();
 
         PriorityQueue<Node> openSet = new PriorityQueue<>((a, b) ->
@@ -1158,7 +1162,7 @@ class ExplorationManager {
 
         start.gScore = 0f;
 
-        HashMap<Node,Node> traveledFrom = new HashMap<>();
+        HashMap<Node, Node> traveledFrom = new HashMap<>();
 
         openSet.add(start);
 
@@ -1166,7 +1170,7 @@ class ExplorationManager {
             Node current = openSet.poll();
 
             if (current.equals(goal)) {
-                return reconstructPath(traveledFrom,current);
+                return reconstructPath(traveledFrom, current);
             }
 
             visitedNodes.add(current);
@@ -1193,12 +1197,13 @@ class ExplorationManager {
         return new ArrayList<>();
 
     }
+
     /**
-     * Implements the A* pathfinding algorithm to find a path between two nodes.
+     * Implements A* pathfinding algorithm between two nodes.
      *
-     * @param start Starting node
-     * @param goal Destination node
-     * @return List of nodes representing the path from start to goal
+     * @param start The starting node
+     * @param goal  The destination node
+     * @return List of nodes representing the optimal path
      */
     ArrayList<Node> aStar(Node start, Node goal) {
 
@@ -1215,7 +1220,7 @@ class ExplorationManager {
         start.gScore = 0f;
         start.fScore = heuristicCost(start, goal);
 
-        HashMap<Node,Node> traveledFrom = new HashMap<>();
+        HashMap<Node, Node> traveledFrom = new HashMap<>();
 
         openSet.add(start);
 
@@ -1223,7 +1228,7 @@ class ExplorationManager {
             Node current = openSet.poll();
 
             if (current.equals(goal)) {
-                return reconstructPath(traveledFrom,current);
+                return reconstructPath(traveledFrom, current);
             }
 
             visitedNodes.add(current);
@@ -1250,14 +1255,15 @@ class ExplorationManager {
         }
         return new ArrayList<>();
     }
+
     /**
-     * Reconstructs the path from the A* search results.
+     * Reconstructs the path from A* or Dijkstra search results.
      *
-     * @param traveledFrom Map of nodes to their predecessor in the path
-     * @param current Current node to reconstruct the path from
-     * @return List of nodes representing the path
+     * @param traveledFrom Map of nodes to their predecessors
+     * @param current      The destination node to trace back from
+     * @return List of nodes representing the complete path
      */
-    private ArrayList<Node> reconstructPath(HashMap<Node,Node> traveledFrom, Node current) {
+    private ArrayList<Node> reconstructPath(HashMap<Node, Node> traveledFrom, Node current) {
         ArrayList<Node> path = new ArrayList<>();
 
         path.add(current);
@@ -1268,28 +1274,35 @@ class ExplorationManager {
         }
         return path;
     }
+
     /**
-     * Calculates the heuristic cost between two nodes for A* pathfinding.
-     * Uses Euclidean distance as the heuristic.
+     * Calculates heuristic cost estimate between two nodes for A* algorithm.
      *
      * @param a First node
      * @param b Second node
-     * @return Estimated cost between nodes
+     * @return Estimated cost between the nodes
      */
     private Float heuristicCost(Node a, Node b) {
         return PVector.dist(a.position, b.position);
     }
+
     /**
-     * Checks if a specific tank is currently in the process of returning home.
+     * Checks if a specific tank is in the returning home navigation state.
      *
      * @param tank The tank to check
-     * @return true if the tank is returning home, false otherwise
+     * @return true if the tank is returning home or waiting at home
      */
     public boolean isReturningHome(Tank tank) {
         NavigationState state = navStates.get(tank);
         return state == NavigationState.RETURNING_HOME || state == NavigationState.WAITING_AT_HOME || state == NavigationState.POSITION_AROUND_ENEMY_BASE;
     }
 
+    /**
+     * Initiates coordinated attack sequence when all tanks are home and enemy detected.
+     * Assigns attack positions and begins assault phase.
+     *
+     * @param enemyBasePos The position of the detected enemy base
+     */
     void startCoordinatedAttack(PVector enemyBasePos) {
         attacking = true;
         parent.println("=== COORDINATED ATTACK INITIATED ===");
@@ -1301,13 +1314,21 @@ class ExplorationManager {
             if (newPos.y > 800) {
                 newPos = PVector.add(enemyBasePos, new PVector(-45, -100 * i));
             }
+            if (isInHomeBase(newPos)) {
+                newPos = new PVector(newPos.x - 30, newPos.y);
+            }
             Node attackNode = addNode(newPos.x, newPos.y);
             enemyBaseNodes.put(tank, attackNode);
             System.out.println("Start coordinated attack at position: " + attackNode.position);
             attackEnemyBase(tank);
         }
     }
-    
+
+    /**
+     * Sets up attack sequence for a specific tank to assault the enemy base.
+     *
+     * @param tank The tank to send to attack position
+     */
     void attackEnemyBase(Tank tank) {
         navStates.put(tank, NavigationState.POSITION_AROUND_ENEMY_BASE);
 
@@ -1318,7 +1339,6 @@ class ExplorationManager {
         }
         currentNodes.put(tank, closestNode);
 
-        // Use the tank's individual base node instead of a shared baseNode
         Node attackNode = enemyBaseNodes.get(tank);
         if (attackNode == null) {
             parent.println("Warning: No base node found for tank " + tank.name);
@@ -1349,43 +1369,12 @@ class ExplorationManager {
         }
     }
 
-    PVector calculateAttackPosition(PVector enemyBase, int tankIndex) {
-        float safeDistance = 75;
-
-        // Get the detection position for more varied attack angles
-        PVector detectionPos = null;
-        if (parent instanceof tanks_bas_v1_0) {
-            tanks_bas_v1_0 game = (tanks_bas_v1_0) parent;
-            detectionPos = game.team0.detectionPosition;
-        }
-
-        if (detectionPos != null) {
-            // Calculate angles based on the direction from detection position to enemy base
-            PVector detectionToEnemy = PVector.sub(enemyBase, detectionPos);
-            float baseAngle = PApplet.atan2(detectionToEnemy.y, detectionToEnemy.x);
-
-            // Spread tanks around the detection angle
-            float[] angleOffsets = {0, PApplet.radians(-45), PApplet.radians(45)}; // Center, left, right
-            float angle = baseAngle + angleOffsets[tankIndex % 3];
-
-            float x = enemyBase.x + safeDistance * PApplet.cos(angle);
-            float y = enemyBase.y + safeDistance * PApplet.sin(angle);
-
-            x = PApplet.constrain(x, 50, parent.width - 50);
-            y = PApplet.constrain(y, 50, parent.height - 50);
-
-            return new PVector(x, y);
-        } else {
-            // Fallback to original method
-            float[] angles = {180, 90, 270};
-            float angle = PApplet.radians(angles[tankIndex % 3]);
-            float x = enemyBase.x + safeDistance * PApplet.cos(angle);
-            float y = enemyBase.y + safeDistance * PApplet.sin(angle);
-
-            x = PApplet.constrain(x, 50, parent.width - 50);
-            y = PApplet.constrain(y, 50, parent.height - 50);
-
-            return new PVector(x, y);
+    /**
+     * Debug method to print current navigation states of all tanks.
+     */
+    public void getNavigationState() {
+        for (Tank tank : tanks) {
+            System.out.println(tank + " state: " + navStates.get(tank));
         }
     }
 }

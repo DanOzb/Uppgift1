@@ -22,8 +22,7 @@ class Node {
     float fScore;
     float gScore;
     /**
-     * Creates a new Node at the specified coordinates.
-     *
+     * Constructor for creating a navigation node.
      * @param parent Reference to the Processing applet
      * @param x X-coordinate of the node
      * @param y Y-coordinate of the node
@@ -41,11 +40,10 @@ class Node {
         gScore = Float.MAX_VALUE;
     }
     /**
-     * Adds an edge from this node to another node with the specified weight.
-     * Only adds the edge if it doesn't already exist.
-     *
-     * @param destination The node to connect to
-     * @param weight The weight/cost of the connection
+     * Adds a directed edge from this node to another node.
+     * Only creates the edge if it doesn't already exist.
+     * @param destination The target node to connect to
+     * @param weight The traversal cost of the connection
      */
     void addEdge(Node destination, float weight){
         boolean edgeExists = false;
@@ -61,36 +59,13 @@ class Node {
         }
     }
     /**
-     * Marks this node as visited.
-     * Updates visit count, last visit time, and resets exploration value.
+     * Marks this node as visited and updates exploration metrics.
+     * Resets exploration value and updates visit tracking.
      */
     void markVisited(){
         visited = true;
         visitCount++;
         lastVisitTime = parent.millis();
         explorationValue = 0;
-    }
-    /**
-     * Displays the node on screen.
-     * Visualizes the node differently based on whether it has been visited.
-     */
-    void display(){ //TODO: kolla i exploration manager, den här kanske ska ligga här
-        parent.fill(visited ? parent.color(150, 200, 150) : parent.color(200, 150, 150), 150);
-        parent.noStroke();
-        parent.ellipse(position.x, position.y, 12, 12);
-    }
-    /**
-     * Checks if another node is a neighbor of this node.
-     *
-     * @param other The node to check
-     * @return true if the other node is a neighbor, false otherwise
-     */
-    boolean isNeighbor(Node other) { //TODO: kanske behövs återkom efter explorationmanager
-        for (Edge edge : edges) {
-            if (edge.destination == other) {
-                return true;
-            }
-        }
-        return false;
     }
 }

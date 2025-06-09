@@ -1,4 +1,5 @@
 import processing.core.*;
+
 import java.util.ArrayList;
 
 /**
@@ -28,50 +29,49 @@ class Tank {
     boolean isInTransition;
     boolean collisionDetected;
 
-     int health = 3;
-     boolean isDestroyed = false;
-     Projectile projectile;
-     int reloadTime = 180; // 3 seconds at 60 fps
-     int reloadCounter = 0;
-     boolean canFire = true;
-     int hits = 0;
+    int health = 3;
+    boolean isDestroyed = false;
+    Projectile projectile;
+    int reloadTime = 180; // 3 seconds at 60 fps
+    int reloadCounter = 0;
+    boolean canFire = true;
+    int hits = 0;
 
     Sensor losSensor;
 
     /**
-     * Creates a new Tank with the specified properties.
-     *
+     * Constructor for creating a new tank.
      * @param parent Reference to the Processing applet
-     * @param _name Name identifier for the tank
-     * @param _startpos Starting position vector
+     * @param _name Unique identifier name for the tank
+     * @param _startpos Initial position vector
      * @param _size Diameter of the tank
-     * @param _col Color of the tank (team identifier)
+     * @param _col Color representing team affiliation
      */
-    Tank(PApplet parent, String _name, PVector _startpos, float _size, int _col ) {
+    Tank(PApplet parent, String _name, PVector _startpos, float _size, int _col) {
         this.parent = parent;
         parent.println("*** Tank.Tank()");
-        this.name         = _name;
-        this.diameter     = _size;
-        this.col          = _col;
+        this.name = _name;
+        this.diameter = _size;
+        this.col = _col;
 
-        this.startpos     = new PVector(_startpos.x, _startpos.y);
-        this.position     = new PVector(this.startpos.x, this.startpos.y);
-        this.velocity     = new PVector(0, 0);
+        this.startpos = new PVector(_startpos.x, _startpos.y);
+        this.position = new PVector(this.startpos.x, this.startpos.y);
+        this.velocity = new PVector(0, 0);
         this.acceleration = new PVector(0, 0);
 
-        this.state        = 0;
-        this.speed        = 1;
-        this.maxspeed     = 2;
+        this.state = 0;
+        this.speed = 1;
+        this.maxspeed = 2;
         this.isInTransition = false;
         this.collisionDetected = false;
 
         this.fieldOfView = 100.0f;
 
-        this.losSensor = new Sensor(parent, this, 150.0f, PApplet.radians(45));
+        this.losSensor = new Sensor(parent, this, 160.0f, PApplet.radians(45));
 
         this.projectile = new Projectile(parent, this);
-
     }
+
     void registerHit() {
         hits++;
         parent.println(name + " scored a hit! Total hits: " + hits);
@@ -82,12 +82,11 @@ class Tank {
     }
 
     /**
-     * Handles being hit by a projectile.
-     *
-     * @return true if the hit was registered, false if tank was already destroyed
+     * Records a successful hit by this tank's projectile.
+     * Increments hit counter and logs the achievement.
      */
-    boolean handleHit() {
-        if (isDestroyed) return false;
+    void handleHit() {
+        if (isDestroyed) return;
 
         health--;
         parent.println(name + " was hit! Health: " + health);
@@ -99,22 +98,26 @@ class Tank {
             parent.println(name + " was destroyed!");
         }
 
-        return true;
     }
-
+    /**
+     * Fires the tank's projectile in the current facing direction.
+     * Handles both normal firing and locked-on target firing.
+     */
     void fire() {
         if (!canFire || isDestroyed) return;
 
-        // Calculate firing direction based on tank state
         PVector direction = new PVector();
 
-        direction.set(this.velocity);
-        direction.normalize();
+        if (state == 9 && losSensor.getIsLockedOn() && losSensor.lockedTarget != null) {
+            direction = PVector.sub(losSensor.lockedTarget.position, position);
+            direction.normalize();
+        } else {
+            direction.set(this.velocity);
+            direction.normalize();
+        }
 
-        // Calculate starting position at the end of the cannon
-        PVector cannonEnd = PVector.add(position, PVector.mult(direction, diameter/2 + 5));
+        PVector cannonEnd = PVector.add(position, PVector.mult(direction, diameter / 2 + 5));
 
-        // Fire projectile
         projectile.fire(cannonEnd, direction);
         canFire = false;
         reloadCounter = reloadTime;
@@ -123,19 +126,21 @@ class Tank {
     }
 
     /**
-     * Stops the tank's movement by setting velocity to zero.
+     * Immediately stops all tank movement by zeroing velocity and acceleration.
      */
     void stopMoving() {
         this.velocity.set(0, 0);  // Use set instead of mult
         this.acceleration.set(0, 0);
     }
+
     /**
-     * Updates the tank's position and velocity based on its current state.
-     * Handles different movement directions including diagonals.
+     * Updates tank position, velocity, and all systems based on current state.
+     * Handles movement, projectile updates, and reload timing.
      */
     void update() {
         // Update movement based on current state
         if (!isDestroyed) {
+            float effectiveMaxSpeed = maxspeed;
             switch (state) {
                 case 0:
                     // Stop moving
@@ -143,43 +148,84 @@ class Tank {
                     break;
                 case 1:
                     // Move right
-                    velocity.x = accelerateTowards(velocity.x, maxspeed);
+                    velocity.x = accelerateTowards(velocity.x, effectiveMaxSpeed);
                     break;
                 case 2:
                     // Move left
-                    velocity.x = accelerateTowards(velocity.x, -maxspeed);
+                    velocity.x = accelerateTowards(velocity.x, -effectiveMaxSpeed);
                     break;
                 case 3:
                     // Move down
-                    velocity.y = accelerateTowards(velocity.y, maxspeed);
+                    velocity.y = accelerateTowards(velocity.y, effectiveMaxSpeed);
                     break;
                 case 4:
                     // Move up
-                    velocity.y = accelerateTowards(velocity.y, -maxspeed);
+                    velocity.y = accelerateTowards(velocity.y, -effectiveMaxSpeed);
                     break;
                 case 5:  // Right + Down (diagonal)
-                    velocity.x = accelerateTowards(velocity.x, maxspeed * 0.7071f);
-                    velocity.y = accelerateTowards(velocity.y, maxspeed * 0.7071f);
+                    velocity.x = accelerateTowards(velocity.x, effectiveMaxSpeed * 0.7071f);
+                    velocity.y = accelerateTowards(velocity.y, effectiveMaxSpeed * 0.7071f);
                     break;
                 case 6:  // Right + Up (diagonal)
-                    velocity.x = accelerateTowards(velocity.x, maxspeed * 0.7071f);
-                    velocity.y = accelerateTowards(velocity.y, -maxspeed * 0.7071f);
+                    velocity.x = accelerateTowards(velocity.x, effectiveMaxSpeed * 0.7071f);
+                    velocity.y = accelerateTowards(velocity.y, -effectiveMaxSpeed * 0.7071f);
                     break;
                 case 7:  // Left + Down (diagonal)
-                    velocity.x = accelerateTowards(velocity.x, -maxspeed * 0.7071f);
-                    velocity.y = accelerateTowards(velocity.y, maxspeed * 0.7071f);
+                    velocity.x = accelerateTowards(velocity.x, -effectiveMaxSpeed * 0.7071f);
+                    velocity.y = accelerateTowards(velocity.y, effectiveMaxSpeed * 0.7071f);
                     break;
                 case 8:  // Left + Up (diagonal)
-                    velocity.x = accelerateTowards(velocity.x, -maxspeed * 0.7071f);
-                    velocity.y = accelerateTowards(velocity.y, -maxspeed * 0.7071f);
+                    velocity.x = accelerateTowards(velocity.x, -effectiveMaxSpeed * 0.7071f);
+                    velocity.y = accelerateTowards(velocity.y, -effectiveMaxSpeed * 0.7071f);
+                    break;
+                case 9:  // Combat mode - tactical movement towards enemy
+                    float combatSpeed = maxspeed * 0.2f;
+                    if (losSensor.lockedTarget != null) {
+                        PVector toEnemy = PVector.sub(losSensor.lockedTarget.position, position);
+                        float distanceToEnemy = toEnemy.mag();
+                        toEnemy.normalize();
+                        PVector moveDirection;
+
+                        if (distanceToEnemy > 240) {
+                            moveDirection = toEnemy.copy();
+                        } else if (distanceToEnemy < 160) {
+                            moveDirection = PVector.mult(toEnemy, -0.5f);
+                        } else {
+                            PVector strafe = new PVector(-toEnemy.y, toEnemy.x);
+                            float time = parent.millis() * 0.002f;
+                            float strafeAmount = PApplet.sin(time + name.hashCode()) * 0.7f; // Use tank name for unique pattern
+
+                            moveDirection = PVector.mult(strafe, strafeAmount);
+                            if (PApplet.sin(time * 0.5f + name.hashCode()) > 0.3f) {
+                                moveDirection.add(PVector.mult(toEnemy, 0.3f)); // Slight advance
+                            }
+                        }
+                        moveDirection.normalize();
+                        velocity.x = accelerateTowards(velocity.x, moveDirection.x * combatSpeed);
+                        velocity.y = accelerateTowards(velocity.y, moveDirection.y * combatSpeed);
+                    } else {
+                        Tank leadTank = findTeammateWithTarget();
+                        if (leadTank != null) {
+                            PVector toLeader = PVector.sub(leadTank.position, position);
+                            float distance = toLeader.mag();
+
+                            if (distance > 100) {
+                                toLeader.normalize();
+                                velocity.x = accelerateTowards(velocity.x, toLeader.x * combatSpeed);
+                                velocity.y = accelerateTowards(velocity.y, toLeader.y * combatSpeed);
+                            } else {
+                                stopMoving();
+                            }
+                        } else {
+                            stopMoving();
+                        }
+                    }
                     break;
             }
-            // Apply velocity to position
             position.add(velocity);
         }
         projectile.update();
 
-        // Handle reload timer
         if (!canFire) {
             reloadCounter--;
             if (reloadCounter <= 0) {
@@ -187,13 +233,28 @@ class Tank {
             }
         }
     }
+    /**
+     * Finds a teammate that has a locked target for coordination.
+     * @return Tank with locked target, or null if none found
+     */
+    Tank findTeammateWithTarget() {
+        tanks_bas_v1_0 game = (tanks_bas_v1_0) parent;
+        for (Tank otherTank : game.allTanks) {
+            if (otherTank != null && otherTank != this && otherTank.col == this.col) {
+                if (otherTank.losSensor.getIsLockedOn() &&
+                        otherTank.losSensor.lockedTarget != null &&
+                        !otherTank.losSensor.lockedTarget.isDestroyed) {
+                    return otherTank;
+                }
+            }
+        }
+        return null;
+    }
 
     /**
-     * Draws the tank's visual representation at the specified coordinates.
-     * Coordinates are relative to the tank's position (local coordinates).
-     *
-     * @param x X-coordinate offset from tank's position
-     * @param y Y-coordinate offset from tank's position
+     * Draws the tank's visual representation at specified local coordinates.
+     * @param x X-coordinate offset from tank position
+     * @param y Y-coordinate offset from tank position
      */
     void drawTank(float x, float y) {
         parent.fill(this.col, 50);
@@ -202,20 +263,48 @@ class Tank {
         // Determine cannon direction based on state
         PVector cannonDir = new PVector();
         switch (state) {
-            case 0: cannonDir.set(1, 0); break; // Default right when stationary
-            case 1: cannonDir.set(1, 0); break; // Right
-            case 2: cannonDir.set(-1, 0); break; // Left
-            case 3: cannonDir.set(0, 1); break; // Down
-            case 4: cannonDir.set(0, -1); break; // Up
-            case 5: cannonDir.set(1, 1).normalize(); break; // Right+Down
-            case 6: cannonDir.set(1, -1).normalize(); break; // Right+Up
-            case 7: cannonDir.set(-1, 1).normalize(); break; // Left+Down
-            case 8: cannonDir.set(-1, -1).normalize(); break; // Left+Up
+            case 0:
+                cannonDir.set(1, 0);
+                break; // Default right when stationary
+            case 1:
+                cannonDir.set(1, 0);
+                break; // Right
+            case 2:
+                cannonDir.set(-1, 0);
+                break; // Left
+            case 3:
+                cannonDir.set(0, 1);
+                break; // Down
+            case 4:
+                cannonDir.set(0, -1);
+                break; // Up
+            case 5:
+                cannonDir.set(1, 1).normalize();
+                break; // Right+Down
+            case 6:
+                cannonDir.set(1, -1).normalize();
+                break; // Right+Up
+            case 7:
+                cannonDir.set(-1, 1).normalize();
+                break; // Left+Down
+            case 8:
+                cannonDir.set(-1, -1).normalize();
+                break; // Left+Up
+            case 9:
+                if (losSensor.getIsLockedOn() && losSensor.lockedTarget != null) {
+                    // Face the locked target
+                    PVector toTarget = PVector.sub(losSensor.lockedTarget.position, position);
+                    toTarget.normalize();
+                    cannonDir.set(toTarget.x, toTarget.y);
+                } else {
+                    cannonDir.set(1, 0); // Default right if no target
+                }
+                break;
         }
 
         // Draw cannon
         parent.strokeWeight(3);
-        float cannonLength = this.diameter/2 + 5;
+        float cannonLength = this.diameter / 2 + 5;
         parent.line(x, y, x + cannonDir.x * cannonLength, y + cannonDir.y * cannonLength);
 
         // Cannon turret
@@ -224,8 +313,8 @@ class Tank {
     }
 
     /**
-     * Displays the tank on the screen with appropriate transformations.
-     * Shows the tank body, field of view, and information (name, position, state).
+     * Renders the complete tank display including health, reload status, and info.
+     * Shows tank body, field of view, status information, and projectiles.
      */
     void display() {
         parent.fill(this.col);
@@ -247,63 +336,61 @@ class Tank {
             // Draw X on destroyed tank
             parent.stroke(0);
             parent.strokeWeight(3);
-            parent.line(-diameter/4, -diameter/4, diameter/4, diameter/4);
-            parent.line(-diameter/4, diameter/4, diameter/4, -diameter/4);
+            parent.line(-diameter / 4, -diameter / 4, diameter / 4, diameter / 4);
+            parent.line(-diameter / 4, diameter / 4, diameter / 4, -diameter / 4);
         } else {
-            // Use the modified drawTank method (see below)
+            // Use the modified drawTank method
             drawTank(0, 0);
 
             // Draw health bar
             parent.noStroke();
             parent.fill(255, 0, 0); // Red background
-            parent.rect(-diameter/2, -diameter/2 - 10, diameter, 5);
+            parent.rect(-diameter / 2, -diameter / 2 - 10, diameter, 5);
 
             parent.fill(0, 255, 0); // Green health
             float healthWidth = (health / 3.0f) * diameter;
-            parent.rect(-diameter/2, -diameter/2 - 10, healthWidth, 5);
+            parent.rect(-diameter / 2, -diameter / 2 - 10, healthWidth, 5);
 
             // Draw reload indicator
             if (!canFire) {
                 parent.fill(255, 255, 0); // Yellow
-                float reloadWidth = ((reloadTime - reloadCounter) / (float)reloadTime) * diameter;
-                parent.rect(-diameter/2, -diameter/2 - 5, reloadWidth, 3);
+                float reloadWidth = ((reloadTime - reloadCounter) / (float) reloadTime) * diameter;
+                parent.rect(-diameter / 2, -diameter / 2 - 5, reloadWidth, 3);
             }
         }
 
-        // Display tank info - maintaining original code
+        // Display tank info
         parent.strokeWeight(1);
         parent.fill(230, 50f);
         parent.rect(0 + 25, 0 - 25, 100, 60);
         parent.fill(30);
         parent.textSize(15);
-        parent.text(navState + "\n" + this.name + "\n( " + (int)this.position.x + ", " + (int)this.position.y + " )", 25 + 5, -5 - 5);
+        parent.text(navState + "\n" + this.name + "\n( " + (int) this.position.x + ", " + (int) this.position.y + " )", 25 + 5, -5 - 5);
 
         parent.popMatrix();
 
         // Display projectile
         projectile.display();
     }
+
     /**
-     * Displays the field of view (FOV) around the tank.
-     * Represents the area that the tank can see or detect.
+     * Renders the circular field of view indicator around the tank.
      */
     void displayFOV() {
         parent.noFill();
-        parent.stroke(col,100);
+        parent.stroke(col, 100);
         parent.strokeWeight(2);
         parent.ellipse(0, 0, fieldOfView, fieldOfView);
 
-        parent.fill(col,20);
+        parent.fill(col, 20);
         parent.ellipse(0, 0, fieldOfView, fieldOfView);
     }
 
     /**
-     * Helper method for smoother acceleration.
-     * Gradually changes the current value toward the target value.
-     *
+     * Smoothly accelerates a value toward a target for fluid movement.
      * @param current Current value
      * @param target Target value to accelerate toward
-     * @return New value after acceleration
+     * @return New value after applying acceleration
      */
     float accelerateTowards(float current, float target) {
         float acceleration = 0.2f;

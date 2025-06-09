@@ -44,15 +44,15 @@ public class tanks_bas_v1_0 extends PApplet{
   boolean pause;
 
   /**
-   * Sets up the size of the game window.
+   * Configures the game window size.
    */
   public void settings()
   {
     size(800, 800);
   }
   /**
-   * Initializes the game, creating all necessary objects and setting initial state.
-   * Creates tanks, trees, collision manager, and exploration manager.
+   * Initializes the game including tanks, trees, teams, and collision systems.
+   * Sets up the complete game state and all game objects.
    */
   public void setup() {
     up             = false;
@@ -125,8 +125,8 @@ public class tanks_bas_v1_0 extends PApplet{
     team0.setupCollisionHandlers(collisions);
   }
   /**
-   * Main game loop function.
-   * Updates game logic, checks for collisions, and renders the game state.
+   * Main game loop that handles updates and rendering.
+   * Processes input, updates game logic, checks collisions, and renders everything.
    */
   public void draw() {
     frameRate(60);
@@ -143,6 +143,7 @@ public class tanks_bas_v1_0 extends PApplet{
     }
     // UPDATE DISPLAY
     team0.displayHomeBase();
+    team1.displayHomeBase();
     displayTrees();
     team0.display();
     displayTanks();
@@ -151,8 +152,8 @@ public class tanks_bas_v1_0 extends PApplet{
 
 
   /**
-   * Checks for keyboard input and updates the tank's state accordingly.
-   * Does not update the controlled tank if auto-explore is active.
+   * Processes keyboard input for manual tank control.
+   * Only active when auto-exploration is disabled.
    */
   void checkForInput() {
     if (tankAgent0.isAutoExploreActive()) {
@@ -181,16 +182,23 @@ public class tanks_bas_v1_0 extends PApplet{
 
 
   /**
-   * Updates the logic for all tanks.
-   * Calls the update method for each tank to update position and state.
+   * Updates logic for all tanks including movement and agent decision making.
+   * Handles tank updates, destruction checking, and sensor processing.
    */
   void updateTanksLogic() {
     // Update all tanks
+    int count = 0;
     for (Tank tank : allTanks) {
+      if(tank.isDestroyed){
+        count++;
+        System.out.println("Tank is destroyed!");
+        tank = null;
+      }
       if (tank != null) {
         tank.update();
       }
     }
+    if(count == 3) gameOver = true;
 
     // Update tank agents with sensor information
     for (TankAgent agent : team0.agents) {
@@ -199,8 +207,8 @@ public class tanks_bas_v1_0 extends PApplet{
   }
 
   /**
-   * Checks for collisions between game entities.
-   * Uses the Collisions manager to handle all collision detection and resolution.
+   * Performs collision detection for all game entities.
+   * Checks tank-tank, tank-tree, tank-border, and projectile collisions.
    */
   void checkForCollisions() {
     if (collisions != null) {
@@ -227,7 +235,7 @@ public class tanks_bas_v1_0 extends PApplet{
   }
 
   /**
-   * Displays all trees in the game world.
+   * Renders all trees in the game world.
    */
   void displayTrees() {
     for (Tree tree : allTrees) {
@@ -237,7 +245,7 @@ public class tanks_bas_v1_0 extends PApplet{
     }
   }
   /**
-   * Displays all tanks in the game world.
+   * Renders game UI including pause screen and game over messages.
    */
   void displayTanks() {
     for (Tank tank : allTanks) {
@@ -247,7 +255,7 @@ public class tanks_bas_v1_0 extends PApplet{
     }
   }
   /**
-   * Displays the game GUI, including pause and game over messages.
+   * Renders game UI including pause screen and game over messages.
    */
   void displayGUI() {
     if (pause) {
@@ -264,8 +272,8 @@ public class tanks_bas_v1_0 extends PApplet{
   }
 
   /**
-   * Handles key press events.
-   * Updates movement direction flags when arrow keys are pressed.
+   * Handles key press events for movement controls.
+   * Updates directional flags for arrow key movement.
    */
   public void keyPressed() {
     if (key == CODED) {
@@ -286,8 +294,8 @@ public class tanks_bas_v1_0 extends PApplet{
     }
   }
   /**
-   * Handles key release events.
-   * Updates movement direction flags and handles special keys like 'p', 'a', and 'r'.
+   * Handles key release events and special command keys.
+   * Processes movement, pause, auto-explore, and pathfinding commands.
    */
   public void keyReleased() {
     if (key == CODED) {
@@ -329,8 +337,7 @@ public class tanks_bas_v1_0 extends PApplet{
   }
 
   /**
-   * Handles mouse press events.
-   * Updates the mouse_pressed flag and prints a message.
+   * Handles mouse press events for debugging and interaction.
    */
   public void mousePressed() {
     println("---------------------------------------------------------");

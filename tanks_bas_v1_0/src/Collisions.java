@@ -1,5 +1,7 @@
 import processing.core.*;
+
 import java.util.*;
+
 /**
  * Manages all collision detection and resolution between game entities.
  * This class handles collisions between tanks, trees, base boundaries, and screen borders.
@@ -16,43 +18,58 @@ public class Collisions {
     }
 
     /**
-     * Checks if a tank can see another entity directly.
-     * Uses the tank's line of sight sensor for verification.
+     * Checks if a tank has line of sight to another position.
+     * Uses the tank's sensor to verify visibility and checks for obstructions.
      *
-     * @param tank Tank to check from
-     * @param otherPosition Position of the entity to check visibility to
-     * @return true if the entity is visible to the tank, false if obstructed
+     * @param tank          The tank checking line of sight
+     * @param otherPosition The target position to check visibility to
+     * @return true if the tank can see the target position, false if obstructed
      */
-    public boolean tankCanSee(Tank tank, PVector otherPosition) {
+
+    public boolean tankCanSee(Tank tank, PVector otherPosition) { //this is currently not used, it works but there was not enough time to make it work with the task description for INLUPP2. It would also prevent tanks from shooting friendly tanks.
         if (tank == null) return false;
 
         ArrayList<SensorDetection> detections = tank.scan(null, getTrees());
         PVector tankToOther = PVector.sub(otherPosition, tank.position);
         tankToOther.normalize();
 
-        // Get tank's direction
         PVector tankDirection = new PVector();
-        switch(tank.state) {
-            case 1: tankDirection.set(1, 0); break;
-            case 2: tankDirection.set(-1, 0); break;
-            case 3: tankDirection.set(0, 1); break;
-            case 4: tankDirection.set(0, -1); break;
-            case 5: tankDirection.set(1, 1).normalize(); break;
-            case 6: tankDirection.set(1, -1).normalize(); break;
-            case 7: tankDirection.set(-1, 1).normalize(); break;
-            case 8: tankDirection.set(-1, -1).normalize(); break;
-            default: tankDirection.set(1, 0); break;
+        switch (tank.state) {
+            case 1:
+                tankDirection.set(1, 0);
+                break;
+            case 2:
+                tankDirection.set(-1, 0);
+                break;
+            case 3:
+                tankDirection.set(0, 1);
+                break;
+            case 4:
+                tankDirection.set(0, -1);
+                break;
+            case 5:
+                tankDirection.set(1, 1).normalize();
+                break;
+            case 6:
+                tankDirection.set(1, -1).normalize();
+                break;
+            case 7:
+                tankDirection.set(-1, 1).normalize();
+                break;
+            case 8:
+                tankDirection.set(-1, -1).normalize();
+                break;
+            default:
+                tankDirection.set(1, 0);
+                break;
         }
 
-        // Check if otherPosition is in the tank's field of view
         float dotProduct = tankDirection.dot(tankToOther);
         float angle = PApplet.acos(dotProduct);
 
         if (angle > tank.losSensor.radianViewAngle / 2) {
-            return false; // Not in field of view
+            return false;
         }
-
-        // Check if any detection is closer than the otherPosition
         float distToOther = PVector.dist(tank.position, otherPosition);
 
         for (SensorDetection detection : detections) {
@@ -60,7 +77,7 @@ public class Collisions {
                     detection.type == SensorDetection.ObjectType.BORDER) {
                 float distToDetection = PVector.dist(tank.position, detection.position);
                 if (distToDetection < distToOther) {
-                    return false; // View is obstructed
+                    return false;
                 }
             }
         }
@@ -68,76 +85,71 @@ public class Collisions {
         return true;
     }
 
+    /**
+     * Sets the collision handler for processing collision events.
+     *
+     * @param handler The CollisionHandler implementation to use
+     */
     public void setCollisionHandler(CollisionHandler handler) {
         this.collisionHandler = handler;
     }
 
+    /**
+     * Sets the array of trees for collision detection.
+     *
+     * @param trees Array of Tree objects to check collisions against
+     */
     public void setTrees(Tree[] trees) {
         this.trees = trees;
     }
 
+    /**
+     * Gets the current array of trees.
+     *
+     * @return Array of Tree objects used for collision detection
+     */
     public Tree[] getTrees() {
         return trees;
     }
 
     /**
-     * Main collision check method checking all possible collisions.
-     * Checks for base collisions, tank-to-tank collisions, tank-to-tree collisions,
-     * and border collisions.
+     * Main collision detection method that checks all types of collisions.
+     * Processes base collisions, tank-to-tank collisions, tree collisions, and border collisions.
      *
-     * @param allTanks Array of Tank objects to check for collisions
-     * @param allTrees Array of Tree objects to check for collisions with tanks
+     * @param allTanks Array of all tanks to check for collisions
+     * @param allTrees Array of all trees to check for collisions
      */
     public void checkAllCollisions(Tank[] allTanks, Tree[] allTrees) {
-            for (Tank tank : allTanks) {
-                if (tank != null && !collisionHandler.isReturningHome(tank)) {
-                    checkBaseCollisions(tank);
+        for (Tank tank : allTanks) {
+            if (tank != null && !collisionHandler.isReturningHome(tank)) {
+                checkBaseCollisions(tank);
+            }
+        }
+
+        for (int i = 0; i < allTanks.length; i++) {
+            if (allTanks[i] == null) continue;
+
+            for (int j = i + 1; j < allTanks.length; j++) {
+                if (allTanks[j] != null) {
+                    checkTankCollision(allTanks[i], allTanks[j]);
                 }
             }
 
-            for (int i = 0; i < allTanks.length; i++) {
-                if (allTanks[i] == null) continue;
+            boolean treeCollision = checkTreeCollisions(allTanks[i], allTrees);
 
-                for (int j = i + 1; j < allTanks.length; j++) {
-                    if (allTanks[j] != null) {
-                        checkTankCollision(allTanks[i], allTanks[j]);
-                    }
-                }
-
-                boolean treeCollision = checkTreeCollisions(allTanks[i], allTrees);
-
-                if (treeCollision && collisionHandler != null && !collisionHandler.isReturningHome(allTanks[i])) {
-                    // Notify the handler about a persistent tree collision
-                    collisionHandler.handleTreeCollision(allTanks[i], null);  // Pass null to indicate a persistent collision
-                }
-
-                checkBorderCollisions(allTanks[i]);
+            if (treeCollision && collisionHandler != null && !collisionHandler.isReturningHome(allTanks[i])) {
+                collisionHandler.handleTreeCollision(allTanks[i], null);  // Pass null to indicate a persistent collision
             }
+
+            checkBorderCollisions(allTanks[i]);
+        }
     }
 
     /**
-     * Checks if tank instance is in enemy base.
-     * Used by checkAllCollisions method.
+     * Checks and handles collisions between a tank and enemy base boundaries.
+     * Prevents tanks from entering enemy bases and triggers collision events.
      *
-     * @param tank Tank object to check for enemy base collision
-     * @return true if in enemy base, otherwise false
-     */
-    public boolean isInEnemyBase(Tank tank) {
-        if (tank.col == parent.color(204, 50, 50)) {
-            return (tank.position.x >= parent.width - 151 && tank.position.y >= parent.height - 351);
-        }
-        else if (tank.col == parent.color(0, 150, 200)) { // blue base
-            return (tank.position.x <= 150 && tank.position.y <= 350);
-        }
-        return false;
-    }
-
-    /**
-     * Checks and handles collisions between tanks and enemy bases.
-     * If a tank is inside an enemy base, it will be moved to a safe position
-     * outside the base and its momentum will be stopped.
-     *
-     * @param tank Tank object to check for base collisions
+     * @param tank The tank to check for base collisions
      */
     public void checkBaseCollisions(Tank tank) {
 
@@ -162,8 +174,7 @@ public class Collisions {
                 tank.velocity.mult(0);
                 collided = true;
             }
-        }
-        else if (tank.col == parent.color(0, 150, 200)) {
+        } else if (tank.col == parent.color(0, 150, 200)) {
             if (positionIsEnemyBase.x <= 150 && tank.position.y <= 350) {
                 tank.velocity.x = 0;
                 tank.position.x = 150 + 1;
@@ -190,12 +201,11 @@ public class Collisions {
     }
 
     /**
-     * Handles collision between two tanks.
-     * For tanks of the same team, stops movement and changes direction.
-     * For enemy tanks, applies physics-based collision response.
+     * Handles collision detection and response between two tanks.
+     * Applies different behavior for same-team vs enemy tank collisions.
      *
-     * @param tank First tank in the collision
-     * @param otherTank Second tank in the collision
+     * @param tank      The first tank in the potential collision
+     * @param otherTank The second tank in the potential collision
      */
     public void checkTankCollision(Tank tank, Tank otherTank) {
         if (tank == otherTank) return;
@@ -204,23 +214,22 @@ public class Collisions {
 
         PVector distanceVect = PVector.sub(tank.position, otherTank.position);
         float distanceVecMag = distanceVect.mag();
-        float minDistance = tank.diameter/2 + otherTank.diameter/2;
+        float minDistance = tank.diameter / 2 + otherTank.diameter / 2;
 
         if (distanceVecMag < minDistance) {
             collisionHandler.handleTankCollision(tank, otherTank);
-            }
-            //parent.println("Tank collision detected between " + tank.name + " and " + otherTank.name);
+        }
+        //parent.println("Tank collision detected between " + tank.name + " and " + otherTank.name);
     }
 
     /**
-     * Checks and handles collisions between a tank and all trees.
-     * Reduces tank velocity if collision occurs.
+     * Checks for collisions between a tank and all trees in the environment.
+     * Reduces tank velocity and triggers collision events when collisions occur.
      *
-     * @param tank Tank to check for tree collisions
-     * @param trees Array of Tree objects to check against
+     * @param tank  The tank to check for tree collisions
+     * @param trees Array of trees to check against
      * @return true if any tree collision was detected, false otherwise
      */
-
     public boolean checkTreeCollisions(Tank tank, Tree[] trees) {
         boolean collisionDetected = false;
 
@@ -245,18 +254,17 @@ public class Collisions {
     }
 
     /**
-     * Checks collision between a single tank and a single tree.
-     * If collision is detected, the tank is pushed away from the tree.
+     * Checks collision between a tank and a single tree.
+     * Handles collision response by pushing the tank away from the tree.
      *
-     * @param tank Tank to check for tree collision
-     * @param tree Tree to check against
-     * @return true if collision was detected, false otherwise
+     * @param tank The tank to check for collision
+     * @param tree The tree to check against
+     * @return true if collision occurred, false otherwise
      */
-
     public boolean checkTreeCollision(Tank tank, Tree tree) {
         PVector distanceVect = PVector.sub(tank.position, tree.position);
         float distanceVecMag = distanceVect.mag();
-        float minDistance = tree.radius + tank.diameter/2;
+        float minDistance = tree.radius + tank.diameter / 2;
 
         if (distanceVecMag < minDistance) {
             float overlap = minDistance - distanceVecMag;
@@ -281,13 +289,13 @@ public class Collisions {
         return false;
     }
 
-    /**
-     * Checks and handles collisions between a tank and the screen borders.
-     * If collision occurs, the tank bounces off the border with reduced velocity.
-     *
-     * @param tank Tank to check for border collisions
-     */
 
+    /**
+     * Checks for collisions between a tank and screen boundaries.
+     * Handles bouncing behavior when tanks hit the edges of the screen.
+     *
+     * @param tank The tank to check for border collisions
+     */
     public void checkBorderCollisions(Tank tank) {
         float r = tank.diameter / 2;
         boolean collision = false;
@@ -323,16 +331,15 @@ public class Collisions {
     }
 
     /**
-     * Checks if a line between two points intersects with a tree.
-     * Used for line-of-sight and path planning calculations.
+     * Determines if a line segment intersects with a circular tree.
+     * Used for line-of-sight calculations and pathfinding.
      *
-     * @param start Starting point of the line
-     * @param end Ending point of the line
+     * @param start      Starting point of the line
+     * @param end        Ending point of the line
      * @param treeCenter Center position of the tree
      * @param treeRadius Radius of the tree
-     * @return true if the line intersects with the tree, false otherwise
+     * @return true if the line intersects the tree, false otherwise
      */
-
     public boolean lineIntersectsTree(PVector start, PVector end, PVector treeCenter, float treeRadius) {
         PVector d = PVector.sub(end, start);
         PVector f = PVector.sub(start, treeCenter);
@@ -356,14 +363,13 @@ public class Collisions {
     }
 
     /**
-     * Checks if there's clear visibility between two points (no obstacles).
-     * Used for path planning and line-of-sight calculations.
+     * Checks if there is clear line of sight between two points.
+     * Considers all trees as potential obstructions.
      *
-     * @param from Starting point for visibility check
-     * @param to Ending point for visibility check
-     * @return true if there is clear visibility between points, false if obstructed
+     * @param from Starting point for the visibility check
+     * @param to   Ending point for the visibility check
+     * @return true if there is clear visibility, false if obstructed
      */
-
     public boolean canSee(PVector from, PVector to) {
         if (parent instanceof tanks_bas_v1_0) {
             tanks_bas_v1_0 game = (tanks_bas_v1_0) parent;
@@ -381,12 +387,11 @@ public class Collisions {
     }
 
     /**
-     * Checks if a position is within a home base (either team).
+     * Determines if a position is within any home base area.
      *
-     * @param position Position to check
-     * @return true if position is in any home base, false otherwise
+     * @param position The position to check
+     * @return true if the position is in a home base, false otherwise
      */
-
     public boolean isInHomeBase(PVector position) {
         if (position.x >= 0 && position.x <= 150 &&
                 position.y >= 0 && position.y <= 350) {
@@ -402,15 +407,13 @@ public class Collisions {
     }
 
     /**
-     * Handles a collision with the map border.
-     * Adjusts navigation strategy and creates a new node near the border.
+     * Handles border collision events by delegating to the collision handler.
+     *
+     * @param tank The tank that collided with the border
      */
     void handleBorderCollision(Tank tank) {
         if (collisionHandler != null) {
             collisionHandler.handleBorderCollision(tank);
-        } else {
-            // Default behavior if no handler is set
-            //parent.println("Border collision detected - adjusting navigation");
         }
     }
 }

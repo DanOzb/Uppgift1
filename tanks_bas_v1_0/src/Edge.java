@@ -10,11 +10,10 @@ class Edge {
     boolean traversable;
     int useCount;
     /**
-     * Creates a new edge between two nodes with a specified weight.
-     *
+     * Constructor for creating an edge between two nodes.
      * @param source The starting node of the edge
      * @param destination The ending node of the edge
-     * @param weight The cost/weight of traversing this edge
+     * @param weight The traversal cost of this edge
      */
     Edge(Node source, Node destination, float weight) {
         this.source = source;
